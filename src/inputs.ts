@@ -2,7 +2,13 @@ import * as core from "@actions/core";
 import { readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { parseBoolean } from "./comment.js";
-import { emptyFailOnNoul, parseProbabilityBar, type FailOnNoul } from "./policy.js";
+import {
+  emptyConfidenceOnNoul,
+  emptyFailOnNoul,
+  parseProbabilityBar,
+  type ConfidenceOnNoul,
+  type FailOnNoul,
+} from "./policy.js";
 import { dimensionOrder, type Dimension } from "./types.js";
 
 export type ActionInputs = {
@@ -15,6 +21,8 @@ export type ActionInputs = {
   maxFiles: number;
   failOnSeverity: number | null;
   failOnNoul: FailOnNoul;
+  minConfidence: number | null;
+  confidenceOnNoul: ConfidenceOnNoul;
   reportPath: string;
   githubToken: string;
   postComment: boolean;
@@ -82,6 +90,8 @@ export function readInputs(
     maxFiles,
     failOnSeverity: parseFailSeverity(io.getInput("fail-on-severity") || "none"),
     failOnNoul: parseFailOnNoul(io),
+    minConfidence: parseProbabilityBar(io.getInput("min-confidence") || "none", "min-confidence"),
+    confidenceOnNoul: parseConfidenceOnNoul(io),
     reportPath,
     githubToken,
     postComment: parseBoolean(io.getInput("post-comment") || "true", "post-comment"),
@@ -115,13 +125,29 @@ const noulInputNames = {
   testGap: "fail-on-test-gap",
 } as const satisfies Record<Dimension, string>;
 
+const confidenceInputNames = {
+  correctness: "confidence-on-correctness",
+  security: "confidence-on-security",
+  reliability: "confidence-on-reliability",
+  compatibility: "confidence-on-compatibility",
+  testGap: "confidence-on-test-gap",
+} as const satisfies Record<Dimension, string>;
+
 export function parseFailOnNoul(io: InputIo): FailOnNoul {
-  const bars = emptyFailOnNoul();
+  return parseDimensionBars(io, noulInputNames, emptyFailOnNoul());
+}
+
+export function parseConfidenceOnNoul(io: InputIo): ConfidenceOnNoul {
+  return parseDimensionBars(io, confidenceInputNames, emptyConfidenceOnNoul());
+}
+
+function parseDimensionBars(
+  io: InputIo,
+  names: Record<Dimension, string>,
+  bars: FailOnNoul,
+): FailOnNoul {
   for (const dimension of dimensionOrder) {
-    bars[dimension] = parseProbabilityBar(
-      io.getInput(noulInputNames[dimension]) || "none",
-      noulInputNames[dimension],
-    );
+    bars[dimension] = parseProbabilityBar(io.getInput(names[dimension]) || "none", names[dimension]);
   }
   return bars;
 }
