@@ -39,6 +39,7 @@ export type Hunk = {
 export type Screening = {
   file: ChangedFile;
   probabilities: Record<Dimension, number>;
+  confidences: Record<Dimension, number | null>;
 };
 
 export type Signal = {
@@ -93,13 +94,19 @@ export type ReviewReport = {
     maxProfiles: number;
     failOnSeverity: number | null;
     failOnNoul: Record<Dimension, number | null>;
+    minConfidence: number | null;
+    confidenceOnNoul: Record<Dimension, number | null>;
   };
   reviewedFiles: number;
   skippedFiles: string[];
   changedTests: string[];
   truncatedFiles: string[];
   followedSignals: number;
-  matrix: Array<{ file: string; probabilities: Record<Dimension, number> }>;
+  matrix: Array<{
+    file: string;
+    probabilities: Record<Dimension, number>;
+    confidences?: Record<Dimension, number | null>;
+  }>;
   profiles: FileProfile[];
   workflow: ReviewWorkflow;
   findings: Finding[];

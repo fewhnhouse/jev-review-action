@@ -43,6 +43,8 @@ export async function run(): Promise<void> {
     });
     report.config.failOnSeverity = inputs.failOnSeverity;
     report.config.failOnNoul = inputs.failOnNoul;
+    report.config.minConfidence = inputs.minConfidence;
+    report.config.confidenceOnNoul = inputs.confidenceOnNoul;
     core.endGroup();
 
     writeReport(inputs.reportPath, report);

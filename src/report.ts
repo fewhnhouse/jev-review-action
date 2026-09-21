@@ -45,5 +45,7 @@ export async function publishResults(report: ReviewReport, reportPath: string): 
   const check = evaluateCheck(report);
   if (!check.passed) {
     core.setFailed(check.reasons.join(" "));
+  } else {
+    for (const reason of check.reasons) core.info(reason);
   }
 }
