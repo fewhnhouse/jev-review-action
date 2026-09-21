@@ -29,11 +29,15 @@ jobs:
         id: jev
         uses: ./
         with:
-          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+          api-key: ${{ secrets.TYPESAFE_API_KEY }}
 
-      - name: Show JEV outputs
+      - name: Use JEV outputs
         if: always()
         run: |
-          echo "findings ${{ steps.jev.outputs.findings-count }}"
-          echo "blocking ${{ steps.jev.outputs.blocking-findings-count }}"
-          echo "reviewed files ${{ steps.jev.outputs.reviewed-files }}"
+          echo "conclusion=${{ steps.jev.outputs.conclusion }}"
+          echo "has-findings=${{ steps.jev.outputs.has-findings }}"
+          echo "findings=${{ steps.jev.outputs.findings-count }}"
+          echo "blocking=${{ steps.jev.outputs.blocking-findings-count }}"
+          echo "followed=${{ steps.jev.outputs.followed-signals }}"
+          echo "comment=${{ steps.jev.outputs.comment-url }}"
+          echo "report=${{ steps.jev.outputs.report-path }}"

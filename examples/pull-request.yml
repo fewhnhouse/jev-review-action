@@ -10,6 +10,9 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
+    outputs:
+      conclusion: ${{ steps.jev.outputs.conclusion }}
+      has-findings: ${{ steps.jev.outputs.has-findings }}
     steps:
       - name: Check out complete history
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -20,9 +23,22 @@ jobs:
         id: jev
         uses: fewhnhouse/jev-review-action@v1
         with:
-          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+          api-key: ${{ secrets.TYPESAFE_API_KEY }}
+          # Optional TypeSafe-compatible gateway, for example a Vercel proxy:
+          # api-base-url: ${{ vars.JEV_API_BASE_URL }}
+          # api-model: jev-latest
           fail-on-severity: "2"
 
-      - name: Show finding count
+      - name: Use JEV outputs in a follow-up step
         if: always()
-        run: echo "JEV findings ${{ steps.jev.outputs.findings-count }}"
+        run: |
+          echo "conclusion=${{ steps.jev.outputs.conclusion }}"
+          echo "findings=${{ steps.jev.outputs.findings-count }}"
+          echo "blocking=${{ steps.jev.outputs.blocking-findings-count }}"
+          echo "followed=${{ steps.jev.outputs.followed-signals }}"
+          echo "comment=${{ steps.jev.outputs.comment-url }}"
+          echo "report=${{ steps.jev.outputs.report-path }}"
+
+      - name: Flag request-changes findings
+        if: steps.jev.outputs.conclusion == 'request_changes'
+        run: echo "JEV requested changes on ${{ steps.jev.outputs.request-changes-count }} finding(s)"

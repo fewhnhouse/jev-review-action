@@ -1,7 +1,8 @@
 import * as core from "@actions/core";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { escapeMarkdown, humanize, joinBounded } from "./format.js";
+import { renderReviewDashboard } from "./dashboard.js";
+import { humanize, joinBounded } from "./format.js";
 import type { ReviewReport } from "./types.js";
 
 export function writeReport(reportPath: string, report: ReviewReport): void {
@@ -17,12 +18,6 @@ export async function publishResults(
   reportPath: string,
   failOnSeverity: number | null,
 ): Promise<void> {
-  const blocking = report.findings.filter(({ severity }) => severity >= 2);
-  core.setOutput("findings-count", report.findings.length);
-  core.setOutput("blocking-findings-count", blocking.length);
-  core.setOutput("reviewed-files", report.reviewedFiles);
-  core.setOutput("report-path", reportPath);
-
   if (report.skippedFiles.length > 0) {
     core.warning(
       `${report.skippedFiles.length} source file(s) exceeded max-files and were not reviewed: ${joinBounded(report.skippedFiles)}`,
@@ -47,44 +42,8 @@ export async function publishResults(
     );
   }
 
-  core.summary
-    .addHeading("JEV Review", 2)
-    .addRaw(
-      `Screened **${report.reviewedFiles}** source file(s) and found **${report.findings.length}** supported concern(s).`,
-    )
-    .addEOL();
-
-  if (report.findings.length > 0) {
-    core.summary.addTable([
-      [
-        { data: "File", header: true },
-        { data: "Concern", header: true },
-        { data: "Severity", header: true },
-        { data: "Action", header: true },
-      ],
-      ...report.findings.map((finding) => [
-        `${escapeMarkdown(finding.file)}:${finding.line}`,
-        `${escapeMarkdown(finding.dimension)} / ${escapeMarkdown(humanize(finding.mechanism))}`,
-        finding.severity.toFixed(2),
-        finding.action,
-      ]),
-    ]);
-  } else {
-    core.summary.addRaw("No concern survived evidence selection and impact scoring.").addEOL();
-  }
-
-  core.summary
-    .addDetails(
-      "Review policy",
-      [
-        `Screening threshold: ${report.config.screenThreshold}`,
-        `Maximum follow-ups: ${report.config.maxFollowUps}`,
-        `Base: \`${escapeMarkdown(report.baseSha)}\``,
-        `Head: \`${escapeMarkdown(report.headSha)}\``,
-        `JSON report: \`${escapeMarkdown(reportPath)}\``,
-      ].join("<br>"),
-    )
-    .write();
+  await core.summary.addRaw(renderReviewDashboard(report), true).write();
+  core.info(`JSON report: ${reportPath}`);
 
   if (
     failOnSeverity !== null &&
