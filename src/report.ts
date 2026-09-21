@@ -1,6 +1,7 @@
 import * as core from "@actions/core";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { escapeMarkdown, humanize, joinBounded } from "./format.js";
 import type { ReviewReport } from "./types.js";
 
 export function writeReport(reportPath: string, report: ReviewReport): void {
@@ -24,12 +25,12 @@ export async function publishResults(
 
   if (report.skippedFiles.length > 0) {
     core.warning(
-      `${report.skippedFiles.length} source file(s) exceeded max-files and were not reviewed: ${report.skippedFiles.join(", ")}`,
+      `${report.skippedFiles.length} source file(s) exceeded max-files and were not reviewed: ${joinBounded(report.skippedFiles)}`,
     );
   }
   if (report.truncatedFiles.length > 0) {
     core.warning(
-      `Large patches were truncated before review: ${report.truncatedFiles.join(", ")}`,
+      `Large patches were truncated before review: ${joinBounded(report.truncatedFiles)}`,
     );
   }
 
@@ -91,15 +92,4 @@ export async function publishResults(
   ) {
     core.setFailed(`JEV found at least one concern at severity ${failOnSeverity} or higher.`);
   }
-}
-
-function humanize(value: string): string {
-  return value
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .toLowerCase();
-}
-
-function escapeMarkdown(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("|", "\\|").replaceAll("`", "\\`");
 }
