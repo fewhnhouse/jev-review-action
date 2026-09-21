@@ -57,6 +57,30 @@ inputs:
     description: Fail when any file's test-gap screening probability is at or above this value (none, or 0–1)
     required: false
     default: none
+  min-confidence:
+    description: Minimum JEV confidence (0–1) required before a fail bar counts. Default none respects every reply. Noul cells use reported confidence when present, otherwise 2×|p−0.5|.
+    required: false
+    default: none
+  confidence-on-correctness:
+    description: Confidence floor for correctness, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
+  confidence-on-security:
+    description: Confidence floor for security, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
+  confidence-on-reliability:
+    description: Confidence floor for reliability, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
+  confidence-on-compatibility:
+    description: Confidence floor for compatibility, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
+  confidence-on-test-gap:
+    description: Confidence floor for test-gap, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
   report-path:
     description: Workspace-relative path for the JSON report
     required: false

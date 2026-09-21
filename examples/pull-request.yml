@@ -31,6 +31,9 @@ jobs:
           # Optional per-category screening fail bars (0–1). Default none:
           # fail-on-security: "0.7"
           # fail-on-correctness: "0.85"
+          # Require confidence before a fail bar counts. Default none:
+          # min-confidence: "0.8"
+          # confidence-on-security: "0.9"
 
       - name: Use JEV outputs in a follow-up step
         if: always()

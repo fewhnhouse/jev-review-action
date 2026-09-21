@@ -51,4 +51,5 @@ diff, sends bounded patch text to the configured JEV endpoint, writes
 annotations, a job summary, an optional sticky pull request comment, and a local
 JSON report. Follow-up steps can read `steps.<id>.outputs.*` even when
 `fail-on-severity` or a per-category `fail-on-*` screening bar fails the review
-step. The 0.70 follow-up threshold is not a CI fail bar.
+step. Confidence floors (`min-confidence`, `confidence-on-*`) ignore replies
+that do not clear the bar. The 0.70 follow-up threshold is not a CI fail bar.
