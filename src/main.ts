@@ -1,6 +1,7 @@
 import * as core from "@actions/core";
 import { collectChangedFiles, createGitRunner } from "./git.js";
 import { readInputs } from "./inputs.js";
+import { postStickySummary } from "./comment.js";
 import { publishResults, writeReport } from "./report.js";
 import { createClient, runReview } from "./review.js";
 
@@ -37,6 +38,15 @@ export async function run(): Promise<void> {
 
     writeReport(inputs.reportPath, report);
     await publishResults(report, inputs.reportPath, inputs.failOnSeverity);
+    await postStickySummary({
+      report,
+      enabled: inputs.postComment,
+      token: inputs.githubToken,
+      repository: process.env.GITHUB_REPOSITORY,
+      pullRequestNumber: inputs.pullRequestNumber,
+      log: { info: core.info, warning: core.warning },
+      ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
+    });
   } catch (error) {
     core.endGroup();
     const message = error instanceof Error ? error.message : String(error);

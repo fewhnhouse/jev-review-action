@@ -1,6 +1,7 @@
 import * as core from "@actions/core";
 import { readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
+import { parseBoolean } from "./comment.js";
 
 export type ActionInputs = {
   apiKey: string;
@@ -10,11 +11,15 @@ export type ActionInputs = {
   maxFiles: number;
   failOnSeverity: number | null;
   reportPath: string;
+  githubToken: string;
+  postComment: boolean;
+  pullRequestNumber: number | null;
 };
 
 type EventPayload = {
   before?: unknown;
   pull_request?: {
+    number?: unknown;
     base?: { sha?: unknown };
     head?: { sha?: unknown };
   };
@@ -35,6 +40,8 @@ export function readInputs(
     trimWhitespace: true,
   });
   io.setSecret(apiKey);
+  const githubToken = optionalInput(io, "github-token") ?? "";
+  if (githubToken) io.setSecret(githubToken);
 
   const event = readEvent(env.GITHUB_EVENT_PATH);
   const baseSha =
@@ -67,6 +74,9 @@ export function readInputs(
     maxFiles,
     failOnSeverity: parseFailSeverity(io.getInput("fail-on-severity") || "none"),
     reportPath,
+    githubToken,
+    postComment: parseBoolean(io.getInput("post-comment") || "true", "post-comment"),
+    pullRequestNumber: parseIssueNumber(event.pull_request?.number),
   };
 }
 
@@ -129,4 +139,8 @@ function parseInteger(value: string, name: string, min: number, max: number): nu
     throw new Error(`${name} must be between ${min} and ${max}`);
   }
   return parsed;
+}
+
+function parseIssueNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
 }
