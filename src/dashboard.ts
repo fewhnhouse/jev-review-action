@@ -1,4 +1,5 @@
 import { escapeHtml, joinBounded, titleCase, truncatePath } from "./format.js";
+import { evaluateCheck, peakScores } from "./policy.js";
 import {
   dimensionLabels,
   dimensionOrder,
@@ -62,6 +63,8 @@ export function renderReviewDashboard(report: ReviewReport): string {
     "",
     "This is a **structured risk screen** of the JavaScript/TypeScript diff, not a written code review. JEV answers yes/no and scoring questions; the tables below are those answers.",
     "",
+    renderVerdict(report),
+    "",
     renderStats([
       { value: String(report.reviewedFiles), label: "files" },
       { value: String(report.changedTests.length), label: "tests" },
@@ -93,6 +96,48 @@ export function renderReviewDashboard(report: ReviewReport): string {
 
   sections.push("", renderGlossary(report), "");
   return sections.join("\n");
+}
+
+function renderVerdict(report: ReviewReport): string {
+  const check = evaluateCheck(report);
+  const headline = check.passed
+    ? "**Check passed.** The review job is green under the configured bars."
+    : "**Check failed.** A configured bar was crossed.";
+  const reasons = check.reasons.map((reason) => `- ${escapeHtml(reason)}`).join("\n");
+  const peaks = peakScores(report);
+  const peakRows =
+    report.matrix.length === 0
+      ? "<tr><td colspan=\"4\">No files were screened.</td></tr>"
+      : peaks
+          .map((peak) => {
+            const bar = report.config.failOnNoul[peak.dimension];
+            const barLabel = bar === null ? "none (informational)" : bar.toFixed(2);
+            return `<tr><td>${escapeHtml(dimensionLabels[peak.dimension])}</td><td align="right">${peak.probability.toFixed(2)}</td><td>${renderFile(peak.file)}</td><td>${escapeHtml(barLabel)}</td></tr>`;
+          })
+          .join("");
+  const severityBar =
+    report.config.failOnSeverity === null
+      ? "none (informational)"
+      : String(report.config.failOnSeverity);
+  const highest = report.findings.length
+    ? Math.max(...report.findings.map((finding) => finding.severity)).toFixed(2)
+    : "none";
+  return [
+    "<p><strong>VERDICT</strong></p>",
+    headline,
+    "",
+    "There is no combined overall score. Each category has its own peak screening probability (0–1, higher means more likely to be a problem). The job fails only when a **fail bar you configured** is crossed.",
+    "",
+    reasons,
+    "",
+    "Peak screening score per category (the highest cell in that column):",
+    "<table>",
+    "<tr><th align=\"left\">Category</th><th align=\"right\">Peak</th><th align=\"left\">File</th><th align=\"left\">Fail bar</th></tr>",
+    peakRows,
+    "</table>",
+    "",
+    `Highest finding severity: **${escapeHtml(highest)} / 3**. Finding fail bar: **${escapeHtml(severityBar)}**.`,
+  ].join("\n");
 }
 
 function renderStats(stats: Array<{ value: string; label: string }>): string {
@@ -240,6 +285,7 @@ function renderGlossary(report: ReviewReport): string {
     "- JEV never writes a paragraph of review prose. Every cell is a structured answer (probability, category, or score).",
     "- The risk matrix is complete: a light or unlabeled-looking cell still has a probability, just below the follow-up threshold.",
     `- File profiles are triage, not defects. Priority 0 = ${priorityHelp[0]}; 3 = ${priorityHelp[3]}.`,
+    "- Screening ≥ 0.70 is a follow-up bar, not a CI fail bar.",
     "- Screening threshold: " + String(report.config.screenThreshold),
     "- Maximum follow-ups: " + String(report.config.maxFollowUps),
     "- Maximum profiles: " + String(report.config.maxProfiles),
