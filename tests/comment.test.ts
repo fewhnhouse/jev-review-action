@@ -15,10 +15,9 @@ describe("renderStickyComment", () => {
     const body = renderStickyComment(report());
     expect(body.startsWith(COMMENT_MARKER)).toBe(true);
     expect(body).toContain("JEV review");
-    expect(body).toContain("VERDICT");
     expect(body).toContain("Check passed");
     expect(body).toContain("<h2>1</h2>");
-    expect(body).toContain("No concern survived evidence selection and impact scoring.");
+    expect(body).toContain("None.");
     expect(body).not.toContain("src/a.ts");
   });
 
@@ -48,12 +47,12 @@ describe("renderStickyComment", () => {
       }),
     );
 
-    expect(body).toContain("FINDINGS");
+    expect(body).toContain("Findings");
     expect(body).toContain("request changes");
-    expect(body).toContain("Skipped over `max-files`: src/b.ts, src/c.ts");
-    expect(body).toContain("How to read this comment");
-    expect(body).toContain("FILE PROFILES");
-    expect(body).toContain("not a bug list");
+    expect(body).toContain("Skipped `max-files`: src/b.ts, src/c.ts");
+    expect(body).toContain("Profiles");
+    expect(body).not.toContain("How to read this comment");
+    expect(body).not.toContain("not a bug list");
   });
 });
 
