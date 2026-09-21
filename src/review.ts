@@ -6,6 +6,7 @@ import {
   type TypeSafeClientConfig,
 } from "@typesafe-ai/sdk";
 import { parseHunks } from "./patch.js";
+import { emptyFailOnNoul } from "./policy.js";
 import {
   dimensions,
   type ChangedFile,
@@ -200,6 +201,8 @@ export async function runReview(options: {
       maxFollowUps: MAX_FOLLOW_UPS,
       maxFiles,
       maxProfiles: MAX_PROFILES,
+      failOnSeverity: null,
+      failOnNoul: emptyFailOnNoul(),
     },
     reviewedFiles: sourceFiles.length,
     skippedFiles,
