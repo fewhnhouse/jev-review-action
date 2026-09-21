@@ -107,10 +107,29 @@ forwards TypeSafe requests.
 | `head-sha` | No | Event head / `GITHUB_SHA` | Makes the reviewed revision explicit and reproducible. |
 | `paths` | No | `.` | Limits review to comma- or newline-separated Git pathspecs, such as `src,packages/api`. |
 | `max-files` | No | `25` | Bounds cost and latency. Accepted range: `1`–`100`; excess source files are reported as skipped. |
-| `fail-on-severity` | No | `none` | Optional policy gate. Set `1`, `2`, or `3` to fail at or above that impact score. |
+| `fail-on-severity` | No | `none` | Fail the job when a finding's impact score is at or above `1`, `2`, or `3`. |
+| `fail-on-correctness` | No | `none` | Fail when any file's correctness probability is at or above this `0`–`1` value. |
+| `fail-on-security` | No | `none` | Fail when any file's security probability is at or above this `0`–`1` value. |
+| `fail-on-reliability` | No | `none` | Fail when any file's reliability probability is at or above this `0`–`1` value. |
+| `fail-on-compatibility` | No | `none` | Fail when any file's compatibility probability is at or above this `0`–`1` value. |
+| `fail-on-test-gap` | No | `none` | Fail when any file's test-gap probability is at or above this `0`–`1` value. |
 | `report-path` | No | `jev-review-report.json` | Chooses where the structured report is stored inside the workspace. |
 | `github-token` | No | `${{ github.token }}` | Creates or updates the sticky pull request summary comment. |
 | `post-comment` | No | `true` | Set `false` to keep findings on the check run only. |
+
+The **0.70 screening threshold** is not a CI fail bar. It only decides which
+cells to inspect further. The job stays green unless you set `fail-on-severity`
+and/or a per-category `fail-on-*` screening bar. The sticky comment now starts
+with a **Verdict** that shows peak scores per category and why the check passed
+or failed.
+
+```yaml
+with:
+  api-key: ${{ secrets.TYPESAFE_API_KEY }}
+  fail-on-severity: "2"
+  fail-on-security: "0.7"
+  fail-on-correctness: "0.85"
+```
 
 The screening threshold, eight-signal follow-up cap, and five-file profile cap
 are deliberately code policy rather than inputs. Keeping those fixed makes
@@ -119,7 +138,7 @@ results comparable across runs and prevents accidental cost expansion.
 ## Outputs
 
 Every output is a string so later steps can use `if:` and `${{ steps.jev.outputs.* }}`.
-Outputs are written before `fail-on-severity` can fail the job, so a follow-up
+Outputs are written before a fail bar can fail the job, so a follow-up
 step with `if: always()` still sees them.
 
 | Output | Meaning |
@@ -137,6 +156,7 @@ step with `if: always()` still sees them.
 | `has-findings` | `true` or `false` |
 | `has-blocking-findings` | `true` or `false` |
 | `conclusion` | `success`, `comment`, or `request_changes` |
+| `check-passed` | `true` when no configured fail bar was crossed |
 | `highest-severity` | Highest finding severity, or empty |
 | `comment-url` | Sticky comment URL, or empty when none was posted |
 | `report-path` | Absolute path of the generated JSON report |

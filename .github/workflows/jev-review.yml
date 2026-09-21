@@ -34,6 +34,7 @@ jobs:
       - name: Use JEV outputs
         if: always()
         run: |
+          echo "check-passed=${{ steps.jev.outputs.check-passed }}"
           echo "conclusion=${{ steps.jev.outputs.conclusion }}"
           echo "has-findings=${{ steps.jev.outputs.has-findings }}"
           echo "findings=${{ steps.jev.outputs.findings-count }}"

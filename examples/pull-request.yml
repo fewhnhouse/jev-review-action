@@ -28,6 +28,9 @@ jobs:
           # api-base-url: ${{ vars.JEV_API_BASE_URL }}
           # api-model: jev-latest
           fail-on-severity: "2"
+          # Optional per-category screening fail bars (0–1). Default none:
+          # fail-on-security: "0.7"
+          # fail-on-correctness: "0.85"
 
       - name: Use JEV outputs in a follow-up step
         if: always()
@@ -42,3 +45,7 @@ jobs:
       - name: Flag request-changes findings
         if: steps.jev.outputs.conclusion == 'request_changes'
         run: echo "JEV requested changes on ${{ steps.jev.outputs.request-changes-count }} finding(s)"
+
+      - name: Fail the follow-up job when a bar was crossed
+        if: always() && steps.jev.outputs.check-passed == 'false'
+        run: echo "JEV check failed under the configured bars"
