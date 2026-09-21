@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  parseApiBaseUrl,
   parseFailSeverity,
   parsePaths,
   readInputs,
@@ -80,6 +81,8 @@ describe("readInputs", () => {
         readInputs(root, { GITHUB_EVENT_PATH: eventPath }, inputIo),
       ).toEqual({
         apiKey: "secret",
+        apiBaseUrl: null,
+        apiModel: null,
         baseSha: "base-sha",
         headSha: "head-sha",
         paths: ["."],
@@ -98,7 +101,10 @@ describe("readInputs", () => {
 
   it("prefers explicit revisions and parses configured controls", () => {
     const inputIo = io({
-      "typesafe-api-key": "secret",
+      "api-key": "gateway-secret",
+      "typesafe-api-key": "ignored-legacy",
+      "api-base-url": "https://gateway.example.test/jev/",
+      "api-model": "jev-latest",
       "base-sha": "explicit-base",
       "head-sha": "explicit-head",
       paths: "src, packages/api",
@@ -110,6 +116,9 @@ describe("readInputs", () => {
     });
 
     expect(readInputs("/work", {}, inputIo)).toMatchObject({
+      apiKey: "gateway-secret",
+      apiBaseUrl: "https://gateway.example.test/jev",
+      apiModel: "jev-latest",
       baseSha: "explicit-base",
       headSha: "explicit-head",
       paths: ["src", "packages/api"],
@@ -120,6 +129,7 @@ describe("readInputs", () => {
       postComment: false,
       pullRequestNumber: null,
     });
+    expect(inputIo.setSecret).toHaveBeenCalledWith("gateway-secret");
     expect(inputIo.setSecret).toHaveBeenCalledWith("gh-token");
   });
 
@@ -186,5 +196,18 @@ describe("readInputs", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it("requires an API key and rejects unsafe gateway URLs", () => {
+    expect(() => readInputs("/work", {}, io({ "base-sha": "base" }))).toThrow(
+      "Provide api-key or typesafe-api-key",
+    );
+    expect(parseApiBaseUrl(undefined)).toBeNull();
+    expect(parseApiBaseUrl("https://ai-gateway.example.test/typesafe/")).toBe(
+      "https://ai-gateway.example.test/typesafe",
+    );
+    expect(() => parseApiBaseUrl("not-a-url")).toThrow("absolute URL");
+    expect(() => parseApiBaseUrl("ftp://example.test")).toThrow("http or https");
+    expect(() => parseApiBaseUrl("https://user:pass@example.test")).toThrow("credentials");
   });
 });
