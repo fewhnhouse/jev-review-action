@@ -6,7 +6,7 @@ import {
   type TypeSafeClientConfig,
 } from "@typesafe-ai/sdk";
 import { parseHunks } from "./patch.js";
-import { emptyFailOnNoul } from "./policy.js";
+import { emptyConfidenceOnNoul, emptyFailOnNoul } from "./policy.js";
 import {
   dimensions,
   type ChangedFile,
@@ -203,6 +203,8 @@ export async function runReview(options: {
       maxProfiles: MAX_PROFILES,
       failOnSeverity: null,
       failOnNoul: emptyFailOnNoul(),
+      minConfidence: null,
+      confidenceOnNoul: emptyConfidenceOnNoul(),
     },
     reviewedFiles: sourceFiles.length,
     skippedFiles,
@@ -211,7 +213,11 @@ export async function runReview(options: {
       .filter(({ truncated }) => truncated)
       .map(({ path }) => path),
     followedSignals: signals.length,
-    matrix: matrix.map(({ file, probabilities }) => ({ file: file.path, probabilities })),
+    matrix: matrix.map(({ file, probabilities, confidences }) => ({
+      file: file.path,
+      probabilities,
+      confidences,
+    })),
     profiles,
     workflow: {
       cells: sourceFiles.length * Object.keys(dimensions).length,
@@ -306,7 +312,19 @@ export async function screenFile(
       compatibility: response.answers.compatibility.noul,
       testGap: response.answers.testGap.noul,
     },
+    confidences: {
+      correctness: reportedNoulConfidence(response.answers.correctness),
+      security: reportedNoulConfidence(response.answers.security),
+      reliability: reportedNoulConfidence(response.answers.reliability),
+      compatibility: reportedNoulConfidence(response.answers.compatibility),
+      testGap: reportedNoulConfidence(response.answers.testGap),
+    },
   };
+}
+
+function reportedNoulConfidence(answer: { noul: number }): number | null {
+  const confidence = (answer as { confidence?: unknown }).confidence;
+  return typeof confidence === "number" && Number.isFinite(confidence) ? confidence : null;
 }
 
 export async function profileFile(
