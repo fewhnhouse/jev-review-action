@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0
 
       - id: jev
-        uses: fewhnhouse/jev-review-action@v1
+        uses: YOUR_GITHUB_USERNAME/jev-review-action@v1
         with:
           typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
           fail-on-severity: "2"
