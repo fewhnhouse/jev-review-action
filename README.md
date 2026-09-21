@@ -38,9 +38,6 @@ jobs:
         uses: fewhnhouse/jev-review-action@v1
         with:
           api-key: ${{ secrets.TYPESAFE_API_KEY }}
-          fail-on-severity: "2"
-          fail-on-security: "0.7"
-          min-confidence: "0.8"
 ```
 
 `fetch-depth: 0` is important: the action must be able to resolve both ends of
@@ -64,10 +61,10 @@ the comparison. See the complete
    findings to a reviewer specialty.
 8. Keep only findings supported by selected evidence.
 
-There is no combined overall score. Each category has its own peak. The job
-stays green unless you set `fail-on-severity` and/or a per-category
-`fail-on-*` bar, and a reply actually clears those bars (and any confidence
-floor).
+There is no combined overall score. Each category has its own peak. By default
+the job fails when a category peaks at `0.80` with confidence at least `0.70`.
+`fail-on-severity` stays off unless you set it. Set a bar to `none` to make
+that check informational.
 
 The screening threshold, eight-signal follow-up cap, and five-file profile cap
 are code policy rather than inputs so results stay comparable and cost stays
@@ -94,37 +91,40 @@ comment. Comment failures are warnings, not job failures. Set
 
 ## Fail bars and confidence
 
-`fail-on-severity` (`none`, `1`, `2`, or `3`) fails the job when a finding's
-impact reaches that score.
+Defaults are meant to ignore coin-flips and fail only on a strong screen:
+
+| Gate | Default |
+| --- | --- |
+| Each `fail-on-*` category bar | `0.8` |
+| `min-confidence` | `0.7` |
+| Per-category `confidence-on-*` | inherit `min-confidence` |
+| `fail-on-severity` | `none` |
 
 `fail-on-correctness`, `fail-on-security`, `fail-on-reliability`,
-`fail-on-compatibility`, and `fail-on-test-gap` (`none` or `0`–`1`) fail when
-any file's screening probability in that category is at or above the bar.
+`fail-on-compatibility`, and `fail-on-test-gap` fail when any file's screening
+probability in that category is at or above the bar. `fail-on-severity`
+(`none`, `1`, `2`, or `3`) fails when a finding's impact reaches that score.
 
 JEV **noul** answers are a yes-probability only; the official System One API
 does not send a separate `confidence` on those cells. Choice and Score answers
 (profiles, hunk selection, mechanism, severity, owner) do.
 
-This action still lets you require confidence before a fail bar counts:
-
-| Input | Applies to |
-| --- | --- |
-| `min-confidence` | Default floor for every category |
-| `confidence-on-correctness` (and the other four) | Override for that category |
-
 A screening cell uses the endpoint's noul `confidence` when present. Otherwise
 it uses binary concentration `2 × |noul − 0.5|` (0 at a coin-flip, 1 at a
 definite yes or no). Findings use the lowest of location, mechanism, severity,
 and owner confidence. A bar only fires when both the score and the confidence
-floor are met. `none` (the default) respects every reply.
+floor are met.
+
+Set `none` to turn a gate off. Raise a bar if 0.8 is too noisy on compatibility
+or test-gap; lower `min-confidence` only if you want mid-range noul cells to
+count.
 
 ```yaml
 with:
   api-key: ${{ secrets.TYPESAFE_API_KEY }}
+  # Defaults already apply. Examples of overrides:
   fail-on-severity: "2"
-  fail-on-security: "0.7"
-  fail-on-correctness: "0.85"
-  min-confidence: "0.8"
+  fail-on-compatibility: none
   confidence-on-test-gap: "0.6"
 ```
 
@@ -169,12 +169,12 @@ forwards TypeSafe requests.
 | `paths` | No | `.` | Limits review to comma- or newline-separated Git pathspecs, such as `src,packages/api`. |
 | `max-files` | No | `25` | Bounds cost and latency. Accepted range: `1`–`100`; excess source files are reported as skipped. |
 | `fail-on-severity` | No | `none` | Fail the job when a finding's impact score is at or above `1`, `2`, or `3`. |
-| `fail-on-correctness` | No | `none` | Fail when any file's correctness probability is at or above this `0`–`1` value. |
-| `fail-on-security` | No | `none` | Fail when any file's security probability is at or above this `0`–`1` value. |
-| `fail-on-reliability` | No | `none` | Fail when any file's reliability probability is at or above this `0`–`1` value. |
-| `fail-on-compatibility` | No | `none` | Fail when any file's compatibility probability is at or above this `0`–`1` value. |
-| `fail-on-test-gap` | No | `none` | Fail when any file's test-gap probability is at or above this `0`–`1` value. |
-| `min-confidence` | No | `none` | Minimum confidence required before any fail bar counts. |
+| `fail-on-correctness` | No | `0.8` | Fail when any file's correctness probability is at or above this `0`–`1` value. |
+| `fail-on-security` | No | `0.8` | Fail when any file's security probability is at or above this `0`–`1` value. |
+| `fail-on-reliability` | No | `0.8` | Fail when any file's reliability probability is at or above this `0`–`1` value. |
+| `fail-on-compatibility` | No | `0.8` | Fail when any file's compatibility probability is at or above this `0`–`1` value. |
+| `fail-on-test-gap` | No | `0.8` | Fail when any file's test-gap probability is at or above this `0`–`1` value. |
+| `min-confidence` | No | `0.7` | Minimum confidence required before any fail bar counts. |
 | `confidence-on-correctness` | No | `none` | Correctness confidence floor; overrides `min-confidence`. |
 | `confidence-on-security` | No | `none` | Security confidence floor; overrides `min-confidence`. |
 | `confidence-on-reliability` | No | `none` | Reliability confidence floor; overrides `min-confidence`. |

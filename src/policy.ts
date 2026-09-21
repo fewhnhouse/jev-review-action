@@ -9,6 +9,9 @@ import {
 export type FailOnNoul = Record<Dimension, number | null>;
 export type ConfidenceOnNoul = Record<Dimension, number | null>;
 
+export const DEFAULT_FAIL_ON_NOUL = 0.8;
+export const DEFAULT_MIN_CONFIDENCE = 0.7;
+
 export function emptyFailOnNoul(): FailOnNoul {
   return {
     correctness: null,

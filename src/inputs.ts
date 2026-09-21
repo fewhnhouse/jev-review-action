@@ -6,6 +6,8 @@ import {
   emptyConfidenceOnNoul,
   emptyFailOnNoul,
   parseProbabilityBar,
+  DEFAULT_FAIL_ON_NOUL,
+  DEFAULT_MIN_CONFIDENCE,
   type ConfidenceOnNoul,
   type FailOnNoul,
 } from "./policy.js";
@@ -90,7 +92,10 @@ export function readInputs(
     maxFiles,
     failOnSeverity: parseFailSeverity(io.getInput("fail-on-severity") || "none"),
     failOnNoul: parseFailOnNoul(io),
-    minConfidence: parseProbabilityBar(io.getInput("min-confidence") || "none", "min-confidence"),
+    minConfidence: parseProbabilityBar(
+      io.getInput("min-confidence") || String(DEFAULT_MIN_CONFIDENCE),
+      "min-confidence",
+    ),
     confidenceOnNoul: parseConfidenceOnNoul(io),
     reportPath,
     githubToken,
@@ -134,20 +139,24 @@ const confidenceInputNames = {
 } as const satisfies Record<Dimension, string>;
 
 export function parseFailOnNoul(io: InputIo): FailOnNoul {
-  return parseDimensionBars(io, noulInputNames, emptyFailOnNoul());
+  return parseDimensionBars(io, noulInputNames, emptyFailOnNoul(), String(DEFAULT_FAIL_ON_NOUL));
 }
 
 export function parseConfidenceOnNoul(io: InputIo): ConfidenceOnNoul {
-  return parseDimensionBars(io, confidenceInputNames, emptyConfidenceOnNoul());
+  return parseDimensionBars(io, confidenceInputNames, emptyConfidenceOnNoul(), "none");
 }
 
 function parseDimensionBars(
   io: InputIo,
   names: Record<Dimension, string>,
   bars: FailOnNoul,
+  fallback: string,
 ): FailOnNoul {
   for (const dimension of dimensionOrder) {
-    bars[dimension] = parseProbabilityBar(io.getInput(names[dimension]) || "none", names[dimension]);
+    bars[dimension] = parseProbabilityBar(
+      io.getInput(names[dimension]) || fallback,
+      names[dimension],
+    );
   }
   return bars;
 }

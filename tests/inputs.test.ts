@@ -93,13 +93,13 @@ describe("readInputs", () => {
         postComment: true,
         pullRequestNumber: 4,
         failOnNoul: {
-          correctness: null,
-          security: null,
-          reliability: null,
-          compatibility: null,
-          testGap: null,
+          correctness: 0.8,
+          security: 0.8,
+          reliability: 0.8,
+          compatibility: 0.8,
+          testGap: 0.8,
         },
-        minConfidence: null,
+        minConfidence: 0.7,
         confidenceOnNoul: {
           correctness: null,
           security: null,
@@ -144,10 +144,10 @@ describe("readInputs", () => {
       maxFiles: 7,
       failOnSeverity: 2,
       failOnNoul: {
-        correctness: null,
+        correctness: 0.8,
         security: 0.7,
-        reliability: null,
-        compatibility: null,
+        reliability: 0.8,
+        compatibility: 0.8,
         testGap: 0.85,
       },
       minConfidence: 0.6,
@@ -260,5 +260,29 @@ describe("readInputs", () => {
         io({ "api-key": "secret", "base-sha": "base", "min-confidence": "high" }),
       ),
     ).toThrow("min-confidence");
+  });
+
+  it("accepts none to disable a default category bar", () => {
+    expect(
+      readInputs(
+        "/work",
+        {},
+        io({
+          "api-key": "secret",
+          "base-sha": "base",
+          "fail-on-compatibility": "none",
+          "min-confidence": "none",
+        }),
+      ),
+    ).toMatchObject({
+      failOnNoul: {
+        correctness: 0.8,
+        security: 0.8,
+        reliability: 0.8,
+        compatibility: null,
+        testGap: 0.8,
+      },
+      minConfidence: null,
+    });
   });
 });
