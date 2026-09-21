@@ -10,6 +10,8 @@ The design is inspired by
 owns discovery, thresholds, limits, and routing while JEV answers narrow,
 structured questions about supplied evidence. JEV never writes review prose.
 
+Please note: This is just a demo, and not meant to be used for production. Jev is a System One model, and not necessarily fit to judge code, which might require complex decision making.
+
 ## Quick start
 
 1. Create a TypeSafe API key and save it as the repository secret
