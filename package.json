@@ -1,0 +1,28 @@
+{
+  "name": "jev-review-action",
+  "version": "1.0.0",
+  "description": "A staged JEV System One code review action for JavaScript and TypeScript changes.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "ncc build src/main.ts -o dist --minify",
+    "check:dist": "npm run build && git diff --exit-code -- dist",
+    "test": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.1",
+    "@typesafe-ai/sdk": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@vercel/ncc": "^0.45.0",
+    "@vitest/coverage-v8": "^5.0.1",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

@@ -1,0 +1,48 @@
+name: JEV Review
+description: Review JavaScript and TypeScript changes with a staged JEV System One workflow
+author: JEV Review Action contributors
+
+branding:
+  icon: search
+  color: purple
+
+inputs:
+  typesafe-api-key:
+    description: TypeSafe API key used only for JEV System One requests
+    required: true
+  base-sha:
+    description: Base Git revision; inferred for pull_request and push events when omitted
+    required: false
+  head-sha:
+    description: Head Git revision; inferred from the event or GITHUB_SHA when omitted
+    required: false
+  paths:
+    description: Newline- or comma-separated Git pathspecs to review
+    required: false
+    default: .
+  max-files:
+    description: Maximum changed source files to send for screening
+    required: false
+    default: "25"
+  fail-on-severity:
+    description: Fail when a finding reaches this severity (none, 1, 2, or 3)
+    required: false
+    default: none
+  report-path:
+    description: Workspace-relative path for the JSON report
+    required: false
+    default: jev-review-report.json
+
+outputs:
+  findings-count:
+    description: Number of supported findings
+  blocking-findings-count:
+    description: Number of findings with severity 2 or higher
+  reviewed-files:
+    description: Number of changed source files screened
+  report-path:
+    description: Absolute path to the JSON report
+
+runs:
+  using: node24
+  main: dist/index.js

@@ -1,0 +1,27 @@
+name: JEV review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Review changed JavaScript and TypeScript
+        id: jev
+        uses: fewhnhouse/jev-review-action@v1
+        with:
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+          fail-on-severity: "2"
+
+      - name: Show finding count
+        if: always()
+        run: echo "JEV findings ${{ steps.jev.outputs.findings-count }}"
