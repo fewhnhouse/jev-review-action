@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  locateSignal,
-  runReview,
-  screenFile,
-  type SystemOneClient,
-} from "../src/review.js";
+import { locateSignal, profileFile, runReview, screenFile, buildClientConfig, describeEndpoint, type SystemOneClient } from "../src/review.js";
 import type { ChangedFile, Signal } from "../src/types.js";
 
 const file: ChangedFile = {
@@ -39,6 +34,26 @@ function screening(correctness = 0.85) {
   };
 }
 
+function profile() {
+  return {
+    answers: {
+      category: {
+        type: "choice",
+        choice: "behavior",
+        confidence: 0.91,
+        probabilities: { behavior: 0.91 },
+      },
+      reviewPriority: {
+        type: "score",
+        score: 2.2,
+        confidence: 0.8,
+        legend: {},
+        probabilities: {},
+      },
+    },
+  };
+}
+
 describe("screenFile", () => {
   it("maps JEV noul answers to dimension probabilities", async () => {
     const { client } = fakeClient(() => screening());
@@ -51,6 +66,27 @@ describe("screenFile", () => {
       reliability: 0.2,
       compatibility: 0.3,
       testGap: 0.4,
+    });
+  });
+});
+
+describe("profileFile", () => {
+  it("maps category and review priority from JEV answers", async () => {
+    const { client } = fakeClient(() => profile());
+    await expect(
+      profileFile(client, file, {
+        correctness: 0.2,
+        security: 0.1,
+        reliability: 0,
+        compatibility: 0,
+        testGap: 0,
+      }),
+    ).resolves.toEqual({
+      file: "src/example.ts",
+      category: "behavior",
+      categoryConfidence: 0.91,
+      reviewPriority: 2.2,
+      reviewPriorityConfidence: 0.8,
     });
   });
 });
@@ -93,6 +129,7 @@ describe("runReview", () => {
   it("runs screen, locate, assess, and route stages", async () => {
     const { client, systemOne } = fakeClient(({ questions }) => {
       if ("correctness" in questions) return screening();
+      if ("category" in questions) return profile();
       if ("evidence" in questions) {
         return {
           answers: {
@@ -147,9 +184,25 @@ describe("runReview", () => {
       now: () => new Date("2026-09-20T12:00:00.000Z"),
     });
 
-    expect(systemOne).toHaveBeenCalledTimes(4);
+    expect(systemOne).toHaveBeenCalledTimes(5);
     expect(report.generatedAt).toBe("2026-09-20T12:00:00.000Z");
     expect(report.skippedFiles).toEqual(["src/skipped.ts"]);
+    expect(report.followedSignals).toBe(1);
+    expect(report.profiles).toEqual([
+      expect.objectContaining({
+        file: "src/example.ts",
+        category: "behavior",
+        reviewPriority: 2.2,
+      }),
+    ]);
+    expect(report.workflow).toEqual({
+      cells: 5,
+      signals: 1,
+      inspected: 1,
+      located: 1,
+      routed: 1,
+      profiled: 1,
+    });
     expect(report.findings).toEqual([
       expect.objectContaining({
         file: "src/example.ts",
@@ -164,7 +217,11 @@ describe("runReview", () => {
   });
 
   it("does not follow signals below the screening threshold", async () => {
-    const { client, systemOne } = fakeClient(() => screening(0.2));
+    const { client, systemOne } = fakeClient(({ questions }) => {
+      if ("correctness" in questions) return screening(0.2);
+      if ("category" in questions) return profile();
+      throw new Error("unexpected follow-up");
+    });
 
     const report = await runReview({
       client,
@@ -176,8 +233,10 @@ describe("runReview", () => {
       maxFiles: 25,
     });
 
-    expect(systemOne).toHaveBeenCalledTimes(1);
+    expect(systemOne).toHaveBeenCalledTimes(2);
     expect(report.findings).toEqual([]);
+    expect(report.profiles).toHaveLength(1);
+    expect(report.workflow.signals).toBe(0);
   });
 
   it("returns an empty report without making API calls for docs-only changes", async () => {
@@ -196,5 +255,33 @@ describe("runReview", () => {
     expect(systemOne).not.toHaveBeenCalled();
     expect(report.reviewedFiles).toBe(0);
     expect(report.findings).toEqual([]);
+    expect(report.profiles).toEqual([]);
+    expect(report.workflow).toEqual({
+      cells: 0,
+      signals: 0,
+      inspected: 0,
+      located: 0,
+      routed: 0,
+      profiled: 0,
+    });
+  });
+});
+
+describe("client config", () => {
+  it("omits unset gateway options and describes the endpoint without query strings", () => {
+    expect(buildClientConfig({ baseURL: null, model: null })).toEqual({});
+    expect(
+      buildClientConfig({
+        baseURL: "https://gateway.example.test/jev",
+        model: "jev-latest",
+      }),
+    ).toEqual({
+      baseURL: "https://gateway.example.test/jev",
+      defaultModel: "jev-latest",
+    });
+    expect(describeEndpoint(null)).toBe("https://api.typesafe.ai");
+    expect(describeEndpoint("https://gateway.example.test/jev?token=secret")).toBe(
+      "https://gateway.example.test/jev",
+    );
   });
 });
