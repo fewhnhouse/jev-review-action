@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { renderReviewDashboard } from "./dashboard.js";
 import { humanize, joinBounded } from "./format.js";
+import { evaluateCheck } from "./policy.js";
 import type { ReviewReport } from "./types.js";
 
 export function writeReport(reportPath: string, report: ReviewReport): void {
@@ -13,11 +14,7 @@ export function writeReport(reportPath: string, report: ReviewReport): void {
   });
 }
 
-export async function publishResults(
-  report: ReviewReport,
-  reportPath: string,
-  failOnSeverity: number | null,
-): Promise<void> {
+export async function publishResults(report: ReviewReport, reportPath: string): Promise<void> {
   if (report.skippedFiles.length > 0) {
     core.warning(
       `${report.skippedFiles.length} source file(s) exceeded max-files and were not reviewed: ${joinBounded(report.skippedFiles)}`,
@@ -45,10 +42,8 @@ export async function publishResults(
   await core.summary.addRaw(renderReviewDashboard(report), true).write();
   core.info(`JSON report: ${reportPath}`);
 
-  if (
-    failOnSeverity !== null &&
-    report.findings.some(({ severity }) => severity >= failOnSeverity)
-  ) {
-    core.setFailed(`JEV found at least one concern at severity ${failOnSeverity} or higher.`);
+  const check = evaluateCheck(report);
+  if (!check.passed) {
+    core.setFailed(check.reasons.join(" "));
   }
 }

@@ -41,6 +41,8 @@ export async function run(): Promise<void> {
       maxFiles: inputs.maxFiles,
       log: core.info,
     });
+    report.config.failOnSeverity = inputs.failOnSeverity;
+    report.config.failOnNoul = inputs.failOnNoul;
     core.endGroup();
 
     writeReport(inputs.reportPath, report);
@@ -54,7 +56,7 @@ export async function run(): Promise<void> {
       ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
     });
     setReviewOutputs(report, inputs.reportPath, comment.commentUrl);
-    await publishResults(report, inputs.reportPath, inputs.failOnSeverity);
+    await publishResults(report, inputs.reportPath);
   } catch (error) {
     core.endGroup();
     const message = error instanceof Error ? error.message : String(error);

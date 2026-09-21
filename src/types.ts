@@ -91,6 +91,8 @@ export type ReviewReport = {
     maxFollowUps: number;
     maxFiles: number;
     maxProfiles: number;
+    failOnSeverity: number | null;
+    failOnNoul: Record<Dimension, number | null>;
   };
   reviewedFiles: number;
   skippedFiles: string[];

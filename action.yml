@@ -34,7 +34,27 @@ inputs:
     required: false
     default: "25"
   fail-on-severity:
-    description: Fail when a finding reaches this severity (none, 1, 2, or 3)
+    description: Fail when a finding reaches this severity (none, 1, 2, or 3). Independent of the 0.70 follow-up bar.
+    required: false
+    default: none
+  fail-on-correctness:
+    description: Fail when any file's correctness screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  fail-on-security:
+    description: Fail when any file's security screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  fail-on-reliability:
+    description: Fail when any file's reliability screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  fail-on-compatibility:
+    description: Fail when any file's compatibility screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  fail-on-test-gap:
+    description: Fail when any file's test-gap screening probability is at or above this value (none, or 0–1)
     required: false
     default: none
   report-path:
@@ -77,6 +97,8 @@ outputs:
     description: true when at least one finding has severity 2 or higher
   conclusion:
     description: success, comment, or request_changes
+  check-passed:
+    description: true when the job did not cross a configured fail bar
   highest-severity:
     description: Highest finding severity, or empty when there are no findings
   comment-url:

@@ -1,4 +1,5 @@
 import * as core from "@actions/core";
+import { evaluateCheck } from "./policy.js";
 import { countByAction, highestSeverity, reviewConclusion } from "./dashboard.js";
 import type { ReviewReport } from "./types.js";
 
@@ -16,6 +17,7 @@ export type ReviewOutputs = {
   "has-findings": string;
   "has-blocking-findings": string;
   conclusion: string;
+  "check-passed": string;
   "highest-severity": string;
   "comment-url": string;
   "report-path": string;
@@ -42,6 +44,7 @@ export function reviewOutputs(
     "has-findings": report.findings.length > 0 ? "true" : "false",
     "has-blocking-findings": blocking > 0 ? "true" : "false",
     conclusion: reviewConclusion(report),
+    "check-passed": evaluateCheck(report).passed ? "true" : "false",
     "highest-severity": highestSeverity(report),
     "comment-url": commentUrl,
     "report-path": reportPath,
