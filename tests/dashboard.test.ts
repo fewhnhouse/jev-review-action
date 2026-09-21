@@ -9,6 +9,19 @@ import {
 } from "../src/dashboard.js";
 import { finding, report } from "./fixtures.js";
 
+const matrix = [
+  {
+    file: "src/a.ts",
+    probabilities: {
+      correctness: 0.1,
+      security: 0.83,
+      reliability: 0.2,
+      compatibility: 0.12,
+      testGap: 0.05,
+    },
+  },
+];
+
 describe("reviewConclusion", () => {
   it("maps findings to a follow-up-friendly conclusion", () => {
     expect(reviewConclusion(report())).toBe("success");
@@ -32,7 +45,7 @@ describe("dashboard helpers", () => {
 });
 
 describe("renderReviewDashboard", () => {
-  it("renders stats, workflow, profiles, and the NOUL matrix", () => {
+  it("renders a compact dashboard for reviewers", () => {
     const body = renderReviewDashboard(
       report({
         reviewedFiles: 2,
@@ -48,18 +61,7 @@ describe("renderReviewDashboard", () => {
             reviewPriorityConfidence: 0.8,
           },
         ],
-        matrix: [
-          {
-            file: "src/a.ts",
-            probabilities: {
-              correctness: 0.1,
-              security: 0.83,
-              reliability: 0.2,
-              compatibility: 0.12,
-              testGap: 0.05,
-            },
-          },
-        ],
+        matrix,
         workflow: {
           cells: 10,
           signals: 1,
@@ -72,59 +74,47 @@ describe("renderReviewDashboard", () => {
     );
 
     expect(body).toContain("JEV review");
-    expect(body).toContain("VERDICT");
     expect(body).toContain("Check passed");
-    expect(body).toContain("does not fail the job");
+    expect(body).not.toContain("structured risk screen");
+    expect(body).not.toContain("How to read this comment");
+    expect(body).not.toContain("does not fail the job");
     expect(body).toContain("<h2>2</h2>");
-    expect(body).toContain("request changes");
-    expect(body).toContain("WORKFLOW");
+    expect(body).toContain("Workflow");
     expect(body).toContain("10");
-    expect(body).toContain("FILE PROFILES");
+    expect(body).toContain("Profiles");
     expect(body).toContain("Behavior");
-    expect(body).toContain("Adds or changes runtime behavior");
-    expect(body).toContain("RISK MATRIX");
+    expect(body).toContain("Matrix");
     expect(body).toContain("0.83");
     expect(body).toContain("0.10");
     expect(body).toContain("<strong>0.83</strong>");
-    expect(body).toContain("FINDINGS");
+    expect(body).toContain("Findings");
     expect(body).toContain("request changes");
-    expect(body).toContain("How to read this comment");
-    expect(body).toContain("one judgment per file per risk");
     expect(body).not.toMatch(/lorem/i);
   });
 
-  it("explains empty profile and matrix sections", () => {
-    const body = renderReviewDashboard(report({ reviewedFiles: 0, workflow: {
-      cells: 0,
-      signals: 0,
-      inspected: 0,
-      located: 0,
-      routed: 0,
-      profiled: 0,
-    } }));
-    expect(body).toContain("VERDICT");
-    expect(body).toContain("Check passed");
-    expect(body).toContain("There is no combined overall score");
-    expect(body).toContain("No files were profiled.");
-    expect(body).toContain("No files were screened.");
-    expect(body).toContain("No concern survived evidence selection and impact scoring.");
-  });
-
-  it("shows a failed check when a per-category bar is crossed", () => {
+  it("keeps empty sections short", () => {
     const body = renderReviewDashboard(
       report({
-        matrix: [
-          {
-            file: "src/a.ts",
-            probabilities: {
-              correctness: 0.1,
-              security: 0.83,
-              reliability: 0.2,
-              compatibility: 0.12,
-              testGap: 0.05,
-            },
-          },
-        ],
+        reviewedFiles: 0,
+        workflow: {
+          cells: 0,
+          signals: 0,
+          inspected: 0,
+          located: 0,
+          routed: 0,
+          profiled: 0,
+        },
+      }),
+    );
+    expect(body).toContain("Check passed");
+    expect(body).toContain("None.");
+    expect(body).not.toContain("There is no combined overall score");
+  });
+
+  it("shows fail reasons when a category bar is crossed", () => {
+    const body = renderReviewDashboard(
+      report({
+        matrix,
         config: {
           ...report().config,
           failOnNoul: {

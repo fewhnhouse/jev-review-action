@@ -1,4 +1,4 @@
-import { emptyFailOnNoul } from "../src/policy.js";
+import { emptyConfidenceOnNoul, emptyFailOnNoul } from "../src/policy.js";
 import type { Finding, ReviewReport } from "../src/types.js";
 
 export const finding: Finding = {
@@ -29,6 +29,8 @@ export function report(overrides: Partial<ReviewReport> = {}): ReviewReport {
       maxProfiles: 5,
       failOnSeverity: null,
       failOnNoul: emptyFailOnNoul(),
+      minConfidence: null,
+      confidenceOnNoul: emptyConfidenceOnNoul(),
     },
     reviewedFiles: 1,
     skippedFiles: [],
