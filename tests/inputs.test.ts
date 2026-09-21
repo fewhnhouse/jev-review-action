@@ -99,6 +99,14 @@ describe("readInputs", () => {
           compatibility: null,
           testGap: null,
         },
+        minConfidence: null,
+        confidenceOnNoul: {
+          correctness: null,
+          security: null,
+          reliability: null,
+          compatibility: null,
+          testGap: null,
+        },
       });
       expect(inputIo.setSecret).toHaveBeenCalledWith("secret");
     } finally {
@@ -119,6 +127,8 @@ describe("readInputs", () => {
       "fail-on-severity": "2",
       "fail-on-security": "0.7",
       "fail-on-test-gap": "0.85",
+      "min-confidence": "0.6",
+      "confidence-on-security": "0.8",
       "report-path": "out/report.json",
       "github-token": "gh-token",
       "post-comment": "false",
@@ -139,6 +149,14 @@ describe("readInputs", () => {
         reliability: null,
         compatibility: null,
         testGap: 0.85,
+      },
+      minConfidence: 0.6,
+      confidenceOnNoul: {
+        correctness: null,
+        security: 0.8,
+        reliability: null,
+        compatibility: null,
+        testGap: null,
       },
       reportPath: "/work/out/report.json",
       githubToken: "gh-token",
@@ -235,5 +253,12 @@ describe("readInputs", () => {
         io({ "api-key": "secret", "base-sha": "base", "fail-on-security": "2" }),
       ),
     ).toThrow("fail-on-security");
+    expect(() =>
+      readInputs(
+        "/work",
+        {},
+        io({ "api-key": "secret", "base-sha": "base", "min-confidence": "high" }),
+      ),
+    ).toThrow("min-confidence");
   });
 });
