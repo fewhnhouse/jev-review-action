@@ -44,10 +44,26 @@ describe("reviewOutputs", () => {
       "has-findings": "true",
       "has-blocking-findings": "true",
       conclusion: "request_changes",
+      "check-passed": "true",
       "highest-severity": "2.10",
       "comment-url": "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-1",
       "report-path": "/work/jev-review-report.json",
     });
+  });
+
+  it("sets check-passed to false when a configured bar is crossed", () => {
+    expect(
+      reviewOutputs(
+        report({
+          findings: [finding],
+          config: {
+            ...report().config,
+            failOnSeverity: 2,
+          },
+        }),
+        "/tmp/report.json",
+      )["check-passed"],
+    ).toBe("false");
   });
 
   it("uses empty strings and false flags when the review is clean", () => {
@@ -63,6 +79,7 @@ describe("reviewOutputs", () => {
       "has-findings": "false",
       "has-blocking-findings": "false",
       conclusion: "success",
+      "check-passed": "true",
       "highest-severity": "",
       "comment-url": "",
     });

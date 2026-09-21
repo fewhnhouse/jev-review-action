@@ -92,6 +92,13 @@ describe("readInputs", () => {
         githubToken: "",
         postComment: true,
         pullRequestNumber: 4,
+        failOnNoul: {
+          correctness: null,
+          security: null,
+          reliability: null,
+          compatibility: null,
+          testGap: null,
+        },
       });
       expect(inputIo.setSecret).toHaveBeenCalledWith("secret");
     } finally {
@@ -110,6 +117,8 @@ describe("readInputs", () => {
       paths: "src, packages/api",
       "max-files": "7",
       "fail-on-severity": "2",
+      "fail-on-security": "0.7",
+      "fail-on-test-gap": "0.85",
       "report-path": "out/report.json",
       "github-token": "gh-token",
       "post-comment": "false",
@@ -124,6 +133,13 @@ describe("readInputs", () => {
       paths: ["src", "packages/api"],
       maxFiles: 7,
       failOnSeverity: 2,
+      failOnNoul: {
+        correctness: null,
+        security: 0.7,
+        reliability: null,
+        compatibility: null,
+        testGap: 0.85,
+      },
       reportPath: "/work/out/report.json",
       githubToken: "gh-token",
       postComment: false,
@@ -209,5 +225,15 @@ describe("readInputs", () => {
     expect(() => parseApiBaseUrl("not-a-url")).toThrow("absolute URL");
     expect(() => parseApiBaseUrl("ftp://example.test")).toThrow("http or https");
     expect(() => parseApiBaseUrl("https://user:pass@example.test")).toThrow("credentials");
+  });
+
+  it("rejects invalid per-category fail bars", () => {
+    expect(() =>
+      readInputs(
+        "/work",
+        {},
+        io({ "api-key": "secret", "base-sha": "base", "fail-on-security": "2" }),
+      ),
+    ).toThrow("fail-on-security");
   });
 });

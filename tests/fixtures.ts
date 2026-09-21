@@ -1,3 +1,4 @@
+import { emptyFailOnNoul } from "../src/policy.js";
 import type { Finding, ReviewReport } from "../src/types.js";
 
 export const finding: Finding = {
@@ -21,7 +22,14 @@ export function report(overrides: Partial<ReviewReport> = {}): ReviewReport {
     baseSha: "base",
     headSha: "head",
     generatedAt: "2026-09-21T10:00:00.000Z",
-    config: { screenThreshold: 0.7, maxFollowUps: 8, maxFiles: 25, maxProfiles: 5 },
+    config: {
+      screenThreshold: 0.7,
+      maxFollowUps: 8,
+      maxFiles: 25,
+      maxProfiles: 5,
+      failOnSeverity: null,
+      failOnNoul: emptyFailOnNoul(),
+    },
     reviewedFiles: 1,
     skippedFiles: [],
     changedTests: [],

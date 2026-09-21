@@ -39,6 +39,20 @@ function sample() {
   return report({
     generatedAt: "2026-09-20T12:00:00.000Z",
     findings: [finding],
+    config: {
+      screenThreshold: 0.7,
+      maxFollowUps: 8,
+      maxFiles: 25,
+      maxProfiles: 5,
+      failOnSeverity: 2,
+      failOnNoul: {
+        correctness: null,
+        security: null,
+        reliability: null,
+        compatibility: null,
+        testGap: null,
+      },
+    },
   });
 }
 
@@ -67,7 +81,7 @@ describe("writeReport", () => {
 
 describe("publishResults", () => {
   it("creates annotations, writes the dashboard summary, and enforces the threshold", async () => {
-    await publishResults(sample(), "/work/report.json", 2);
+    await publishResults(sample(), "/work/report.json");
 
     expect(core.setOutput).not.toHaveBeenCalled();
     expect(core.warning).toHaveBeenCalledWith(
@@ -80,9 +94,40 @@ describe("publishResults", () => {
     expect(core.info).toHaveBeenCalledWith("JSON report: /work/report.json");
   });
 
-  it("does not fail when fail-on-severity is none", async () => {
-    await publishResults(sample(), "/work/report.json", null);
+  it("fails when a per-category screening bar is crossed", async () => {
+    await publishResults(
+      report({
+        matrix: [
+          {
+            file: "src/a.ts",
+            probabilities: {
+              correctness: 0.1,
+              security: 0.82,
+              reliability: 0.2,
+              compatibility: 0.12,
+              testGap: 0.05,
+            },
+          },
+        ],
+        config: {
+          ...report().config,
+          failOnNoul: {
+            correctness: null,
+            security: 0.7,
+            reliability: null,
+            compatibility: null,
+            testGap: null,
+          },
+        },
+      }),
+      "/work/report.json",
+    );
 
+    expect(core.setFailed).toHaveBeenCalledWith(expect.stringContaining("Security peaked at 0.82"));
+  });
+
+  it("does not fail when fail-on-severity is none and no category bars are set", async () => {
+    await publishResults(report({ findings: [finding] }), "/work/report.json");
     expect(core.setFailed).not.toHaveBeenCalled();
   });
 });

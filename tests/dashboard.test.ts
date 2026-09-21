@@ -72,6 +72,9 @@ describe("renderReviewDashboard", () => {
     );
 
     expect(body).toContain("JEV review");
+    expect(body).toContain("VERDICT");
+    expect(body).toContain("Check passed");
+    expect(body).toContain("does not fail the job");
     expect(body).toContain("<h2>2</h2>");
     expect(body).toContain("request changes");
     expect(body).toContain("WORKFLOW");
@@ -99,8 +102,43 @@ describe("renderReviewDashboard", () => {
       routed: 0,
       profiled: 0,
     } }));
+    expect(body).toContain("VERDICT");
+    expect(body).toContain("Check passed");
+    expect(body).toContain("There is no combined overall score");
     expect(body).toContain("No files were profiled.");
     expect(body).toContain("No files were screened.");
     expect(body).toContain("No concern survived evidence selection and impact scoring.");
+  });
+
+  it("shows a failed check when a per-category bar is crossed", () => {
+    const body = renderReviewDashboard(
+      report({
+        matrix: [
+          {
+            file: "src/a.ts",
+            probabilities: {
+              correctness: 0.1,
+              security: 0.83,
+              reliability: 0.2,
+              compatibility: 0.12,
+              testGap: 0.05,
+            },
+          },
+        ],
+        config: {
+          ...report().config,
+          failOnNoul: {
+            correctness: null,
+            security: 0.7,
+            reliability: null,
+            compatibility: null,
+            testGap: null,
+          },
+        },
+      }),
+    );
+    expect(body).toContain("Check failed");
+    expect(body).toContain("Security peaked at 0.83");
+    expect(body).toContain("0.70");
   });
 });

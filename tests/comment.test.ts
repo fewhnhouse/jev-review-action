@@ -15,6 +15,8 @@ describe("renderStickyComment", () => {
     const body = renderStickyComment(report());
     expect(body.startsWith(COMMENT_MARKER)).toBe(true);
     expect(body).toContain("JEV review");
+    expect(body).toContain("VERDICT");
+    expect(body).toContain("Check passed");
     expect(body).toContain("<h2>1</h2>");
     expect(body).toContain("No concern survived evidence selection and impact scoring.");
     expect(body).not.toContain("src/a.ts");
