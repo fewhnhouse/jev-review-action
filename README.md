@@ -2,13 +2,13 @@
 
 A GitHub Action that reviews changed JavaScript and TypeScript with a bounded,
 staged [JEV System One](https://typesafe.ai) workflow. It adds line annotations,
-writes a job summary, posts a dashboard-style sticky pull request comment, emits
+writes a job summary, posts a compact sticky pull request comment, emits
 machine-readable outputs for follow-up steps, and saves a JSON report.
 
 The design is inspired by
 [`devagrawal09/jev-review`](https://github.com/devagrawal09/jev-review): code
 owns discovery, thresholds, limits, and routing while JEV answers narrow,
-structured questions about supplied evidence.
+structured questions about supplied evidence. JEV never writes review prose.
 
 ## Quick start
 
@@ -39,37 +39,98 @@ jobs:
         with:
           api-key: ${{ secrets.TYPESAFE_API_KEY }}
           fail-on-severity: "2"
-
-      - name: Branch on the review conclusion
-        if: always() && steps.jev.outputs.has-findings == 'true'
-        run: |
-          echo "conclusion=${{ steps.jev.outputs.conclusion }}"
-          echo "blocking=${{ steps.jev.outputs.blocking-findings-count }}"
-          echo "comment=${{ steps.jev.outputs.comment-url }}"
+          fail-on-security: "0.7"
+          min-confidence: "0.8"
 ```
 
 `fetch-depth: 0` is important: the action must be able to resolve both ends of
 the comparison. See the complete
 [`examples/pull-request.yml`](examples/pull-request.yml).
 
-## Review flow
+## How it works
 
 1. Discover changed `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.mts`, and
    `.cts` files with `git diff base...head`.
 2. Separate changed tests and provide compact test patches as context.
-3. Screen each source patch for correctness, security, reliability,
-   compatibility, and test-gap signals using JEV `noul` questions.
-4. Profile the highest-signal files (change category and review priority).
-5. Follow only signals at or above `0.70`, capped at eight per run.
-6. Ask JEV to select the strongest concrete diff hunk.
-7. Classify the mechanism, score impact from `0` to `3`, and route significant
+3. Screen each source patch with JEV `noul` questions for five categories:
+   correctness, security, reliability, compatibility, and test gap. Each cell
+   is the probability (0–1) that the patch introduces that problem.
+4. Profile the highest-signal files (`choice` change type and `score` review
+   priority, 0–3).
+5. Follow signals at or above `0.70`, capped at eight per run. That 0.70 value
+   is an inspect bar, not a CI fail bar.
+6. Ask JEV to select the strongest concrete diff hunk (`choice`).
+7. Classify the mechanism, score impact from 0 to 3, and route significant
    findings to a reviewer specialty.
-8. Keep only findings supported by selected evidence and emit annotations, a
-   dashboard comment, outputs, and a JSON report.
+8. Keep only findings supported by selected evidence.
 
-The action does not ask a model for free-form review prose. The sticky comment
-is a GitHub-flavored dashboard of those fields: headline stats, the workflow
-funnel, file profiles, a NOUL heatmap, and retained findings.
+There is no combined overall score. Each category has its own peak. The job
+stays green unless you set `fail-on-severity` and/or a per-category
+`fail-on-*` bar, and a reply actually clears those bars (and any confidence
+floor).
+
+The screening threshold, eight-signal follow-up cap, and five-file profile cap
+are code policy rather than inputs so results stay comparable and cost stays
+bounded.
+
+## Sticky comment
+
+On pull requests the action upserts one comment tagged
+`<!-- jev-review-action -->`. It is a scan of this review, not a primer:
+
+- Check passed or failed, with fail reasons only when a bar was crossed
+- Peak probability and confidence per category, with the file and configured
+  bars
+- Highest finding severity
+- Counts: files, tests, followed, findings, request changes
+- Workflow funnel: cells → signals → inspected → located → routed
+- File profiles: type, priority, confidence
+- Risk matrix: probability (bold if ≥ 0.70) with confidence underneath
+- Findings: concern, severity, confidence, owner, action
+
+How the stages, noul values, and bars work lives in this README, not in the
+comment. Comment failures are warnings, not job failures. Set
+`post-comment: false` to skip it.
+
+## Fail bars and confidence
+
+`fail-on-severity` (`none`, `1`, `2`, or `3`) fails the job when a finding's
+impact reaches that score.
+
+`fail-on-correctness`, `fail-on-security`, `fail-on-reliability`,
+`fail-on-compatibility`, and `fail-on-test-gap` (`none` or `0`–`1`) fail when
+any file's screening probability in that category is at or above the bar.
+
+JEV **noul** answers are a yes-probability only; the official System One API
+does not send a separate `confidence` on those cells. Choice and Score answers
+(profiles, hunk selection, mechanism, severity, owner) do.
+
+This action still lets you require confidence before a fail bar counts:
+
+| Input | Applies to |
+| --- | --- |
+| `min-confidence` | Default floor for every category |
+| `confidence-on-correctness` (and the other four) | Override for that category |
+
+A screening cell uses the endpoint's noul `confidence` when present. Otherwise
+it uses binary concentration `2 × |noul − 0.5|` (0 at a coin-flip, 1 at a
+definite yes or no). Findings use the lowest of location, mechanism, severity,
+and owner confidence. A bar only fires when both the score and the confidence
+floor are met. `none` (the default) respects every reply.
+
+```yaml
+with:
+  api-key: ${{ secrets.TYPESAFE_API_KEY }}
+  fail-on-severity: "2"
+  fail-on-security: "0.7"
+  fail-on-correctness: "0.85"
+  min-confidence: "0.8"
+  confidence-on-test-gap: "0.6"
+```
+
+`check-passed` is `true` when no configured bar was crossed. Outputs are
+written before a fail bar can fail the job, so a follow-up step with
+`if: always()` still sees them.
 
 ## Pluggable API
 
@@ -113,33 +174,19 @@ forwards TypeSafe requests.
 | `fail-on-reliability` | No | `none` | Fail when any file's reliability probability is at or above this `0`–`1` value. |
 | `fail-on-compatibility` | No | `none` | Fail when any file's compatibility probability is at or above this `0`–`1` value. |
 | `fail-on-test-gap` | No | `none` | Fail when any file's test-gap probability is at or above this `0`–`1` value. |
+| `min-confidence` | No | `none` | Minimum confidence required before any fail bar counts. |
+| `confidence-on-correctness` | No | `none` | Correctness confidence floor; overrides `min-confidence`. |
+| `confidence-on-security` | No | `none` | Security confidence floor; overrides `min-confidence`. |
+| `confidence-on-reliability` | No | `none` | Reliability confidence floor; overrides `min-confidence`. |
+| `confidence-on-compatibility` | No | `none` | Compatibility confidence floor; overrides `min-confidence`. |
+| `confidence-on-test-gap` | No | `none` | Test-gap confidence floor; overrides `min-confidence`. |
 | `report-path` | No | `jev-review-report.json` | Chooses where the structured report is stored inside the workspace. |
 | `github-token` | No | `${{ github.token }}` | Creates or updates the sticky pull request summary comment. |
 | `post-comment` | No | `true` | Set `false` to keep findings on the check run only. |
 
-The **0.70 screening threshold** is not a CI fail bar. It only decides which
-cells to inspect further. The job stays green unless you set `fail-on-severity`
-and/or a per-category `fail-on-*` screening bar. The sticky comment now starts
-with a **Verdict** that shows peak scores per category and why the check passed
-or failed.
-
-```yaml
-with:
-  api-key: ${{ secrets.TYPESAFE_API_KEY }}
-  fail-on-severity: "2"
-  fail-on-security: "0.7"
-  fail-on-correctness: "0.85"
-```
-
-The screening threshold, eight-signal follow-up cap, and five-file profile cap
-are deliberately code policy rather than inputs. Keeping those fixed makes
-results comparable across runs and prevents accidental cost expansion.
-
 ## Outputs
 
 Every output is a string so later steps can use `if:` and `${{ steps.jev.outputs.* }}`.
-Outputs are written before a fail bar can fail the job, so a follow-up
-step with `if: always()` still sees them.
 
 | Output | Meaning |
 | --- | --- |
@@ -172,9 +219,9 @@ jobs:
 ```
 
 The JSON report includes the compared revisions, policy values, screening
-matrix, file profiles, workflow funnel, changed-test paths, skipped/truncated
-files, and structured findings. It does not include source patches or the API
-key.
+matrix (probabilities and confidences), file profiles, workflow funnel,
+changed-test paths, skipped/truncated files, and structured findings. It does
+not include source patches or the API key.
 
 ## Behavior and limits
 
@@ -187,8 +234,6 @@ key.
   reviewed. Any remainder are listed, not silently discarded.
 - Findings are review signals, not proof of a defect. Keep a human reviewer in
   the merge decision.
-- On pull requests, the action upserts one sticky comment tagged
-  `<!-- jev-review-action -->`. Comment failures are warnings, not job failures.
 - This release reviews JavaScript and TypeScript changes only. It does not run
   compilers, linters, tests, or repository code.
 
