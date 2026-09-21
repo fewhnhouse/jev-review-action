@@ -2,6 +2,8 @@ import * as core from "@actions/core";
 import { readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { parseBoolean } from "./comment.js";
+import { emptyFailOnNoul, parseProbabilityBar, type FailOnNoul } from "./policy.js";
+import { dimensionOrder, type Dimension } from "./types.js";
 
 export type ActionInputs = {
   apiKey: string;
@@ -12,6 +14,7 @@ export type ActionInputs = {
   paths: string[];
   maxFiles: number;
   failOnSeverity: number | null;
+  failOnNoul: FailOnNoul;
   reportPath: string;
   githubToken: string;
   postComment: boolean;
@@ -78,6 +81,7 @@ export function readInputs(
     paths: parsePaths(io.getInput("paths") || "."),
     maxFiles,
     failOnSeverity: parseFailSeverity(io.getInput("fail-on-severity") || "none"),
+    failOnNoul: parseFailOnNoul(io),
     reportPath,
     githubToken,
     postComment: parseBoolean(io.getInput("post-comment") || "true", "post-comment"),
@@ -101,6 +105,25 @@ export function parseFailSeverity(value: string): number | null {
     throw new Error("fail-on-severity must be one of: none, 1, 2, 3");
   }
   return Number(normalized);
+}
+
+const noulInputNames = {
+  correctness: "fail-on-correctness",
+  security: "fail-on-security",
+  reliability: "fail-on-reliability",
+  compatibility: "fail-on-compatibility",
+  testGap: "fail-on-test-gap",
+} as const satisfies Record<Dimension, string>;
+
+export function parseFailOnNoul(io: InputIo): FailOnNoul {
+  const bars = emptyFailOnNoul();
+  for (const dimension of dimensionOrder) {
+    bars[dimension] = parseProbabilityBar(
+      io.getInput(noulInputNames[dimension]) || "none",
+      noulInputNames[dimension],
+    );
+  }
+  return bars;
 }
 
 export function parseApiBaseUrl(value: string | undefined): string | null {
