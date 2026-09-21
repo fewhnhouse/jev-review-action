@@ -78,10 +78,15 @@ describe("renderReviewDashboard", () => {
     expect(body).toContain("10");
     expect(body).toContain("FILE PROFILES");
     expect(body).toContain("Behavior");
-    expect(body).toContain("NOUL MATRIX");
+    expect(body).toContain("Adds or changes runtime behavior");
+    expect(body).toContain("RISK MATRIX");
     expect(body).toContain("0.83");
+    expect(body).toContain("0.10");
+    expect(body).toContain("<strong>0.83</strong>");
     expect(body).toContain("FINDINGS");
-    expect(body).toContain("request_changes");
+    expect(body).toContain("request changes");
+    expect(body).toContain("How to read this comment");
+    expect(body).toContain("one judgment per file per risk");
     expect(body).not.toMatch(/lorem/i);
   });
 

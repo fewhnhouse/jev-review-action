@@ -47,10 +47,11 @@ describe("renderStickyComment", () => {
     );
 
     expect(body).toContain("FINDINGS");
-    expect(body).toContain("request_changes");
+    expect(body).toContain("request changes");
     expect(body).toContain("Skipped over `max-files`: src/b.ts, src/c.ts");
-    expect(body).toContain("structured questions");
+    expect(body).toContain("How to read this comment");
     expect(body).toContain("FILE PROFILES");
+    expect(body).toContain("not a bug list");
   });
 });
 
