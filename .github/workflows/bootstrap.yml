@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   bootstrap:
-    if: github.actor == 'fewhnhouse' && hashFiles('_bootstrap/source.tar.gz.b64') != ''
+    if: github.actor == 'fewhnhouse'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
