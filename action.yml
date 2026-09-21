@@ -7,9 +7,18 @@ branding:
   color: purple
 
 inputs:
+  api-key:
+    description: API key for the configured JEV endpoint (TypeSafe or a TypeSafe-compatible gateway)
+    required: false
   typesafe-api-key:
-    description: TypeSafe API key used only for JEV System One requests
-    required: true
+    description: Alias for api-key; used when api-key is omitted
+    required: false
+  api-base-url:
+    description: TypeSafe System One API root. Defaults to https://api.typesafe.ai. Point this at a reverse proxy or Vercel-hosted TypeSafe-compatible gateway, not an OpenAI chat-completions URL.
+    required: false
+  api-model:
+    description: Model override passed to the TypeSafe SDK (defaultModel). Omit to use the endpoint default.
+    required: false
   base-sha:
     description: Base Git revision; inferred for pull_request and push events when omitted
     required: false
@@ -46,8 +55,32 @@ outputs:
     description: Number of supported findings
   blocking-findings-count:
     description: Number of findings with severity 2 or higher
+  request-changes-count:
+    description: Number of findings with action request_changes
+  comment-findings-count:
+    description: Number of findings with action comment
   reviewed-files:
     description: Number of changed source files screened
+  changed-tests:
+    description: Number of changed test files used as context
+  followed-signals:
+    description: Number of screening signals inspected after the follow-up cap
+  located-findings:
+    description: Number of signals that produced a supported finding
+  routed-findings:
+    description: Number of findings routed to a reviewer specialty
+  skipped-files-count:
+    description: Number of source files skipped because they exceeded max-files
+  has-findings:
+    description: true when at least one finding survived evidence selection
+  has-blocking-findings:
+    description: true when at least one finding has severity 2 or higher
+  conclusion:
+    description: success, comment, or request_changes
+  highest-severity:
+    description: Highest finding severity, or empty when there are no findings
+  comment-url:
+    description: URL of the sticky pull request comment, or empty when none was posted
   report-path:
     description: Absolute path to the JSON report
 

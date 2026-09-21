@@ -5,6 +5,8 @@ import { parseBoolean } from "./comment.js";
 
 export type ActionInputs = {
   apiKey: string;
+  apiBaseUrl: string | null;
+  apiModel: string | null;
   baseSha: string;
   headSha: string;
   paths: string[];
@@ -35,10 +37,11 @@ export function readInputs(
   env = process.env,
   io: InputIo = { getInput: core.getInput, setSecret: core.setSecret },
 ): ActionInputs {
-  const apiKey = io.getInput("typesafe-api-key", {
-    required: true,
-    trimWhitespace: true,
-  });
+  const apiKey =
+    optionalInput(io, "api-key") ?? optionalInput(io, "typesafe-api-key") ?? "";
+  if (!apiKey) {
+    throw new Error("Provide api-key or typesafe-api-key.");
+  }
   io.setSecret(apiKey);
   const githubToken = optionalInput(io, "github-token") ?? "";
   if (githubToken) io.setSecret(githubToken);
@@ -68,6 +71,8 @@ export function readInputs(
 
   return {
     apiKey,
+    apiBaseUrl: parseApiBaseUrl(optionalInput(io, "api-base-url")),
+    apiModel: optionalInput(io, "api-model") ?? null,
     baseSha,
     headSha,
     paths: parsePaths(io.getInput("paths") || "."),
@@ -96,6 +101,24 @@ export function parseFailSeverity(value: string): number | null {
     throw new Error("fail-on-severity must be one of: none, 1, 2, 3");
   }
   return Number(normalized);
+}
+
+export function parseApiBaseUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  if (value.length > 2048) throw new Error("api-base-url is too long");
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("api-base-url must be an absolute URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("api-base-url must use http or https");
+  }
+  if (url.username || url.password) {
+    throw new Error("api-base-url must not contain credentials");
+  }
+  return value.replace(/\/+$/, "");
 }
 
 export function safeReportPath(cwd: string, value: string): string {
