@@ -10,6 +10,7 @@ import {
   dimensions,
   type ChangedFile,
   type Dimension,
+  type FileProfile,
   type Finding,
   type ReviewReport,
   type Screening,
@@ -18,6 +19,7 @@ import {
 
 export const SCREEN_THRESHOLD = 0.7;
 export const MAX_FOLLOW_UPS = 8;
+export const MAX_PROFILES = 5;
 const CONCURRENCY = 3;
 const MIN_LOCATION_CONFIDENCE = 0.55;
 const ROUTE_SEVERITY = 1.5;
@@ -83,8 +85,44 @@ const owners = {
   maintainer: "The owning domain or feature maintainer",
 } as const;
 
+const changeTypes = {
+  behavior: "Adds or changes runtime behavior",
+  interface: "Changes an exported API, type, protocol, or data shape",
+  infrastructure: "Changes execution, scheduling, build, or operational plumbing",
+  observability: "Changes events, logging, monitoring, or diagnostics",
+  refactor: "Restructures implementation without intending behavior changes",
+  routine: "A small routine change that fits none of the other categories",
+} as const;
+
+const reviewPriorityRubric = [
+  "Routine review is sufficient",
+  "A focused review of the changed behavior is useful",
+  "Careful review is needed before merge",
+  "Specialist or immediate review is needed",
+] as const;
+
+export function buildClientConfig(options: {
+  baseURL?: string | null;
+  model?: string | null;
+}): Omit<TypeSafeClientConfig, "apiKey"> {
+  const config: Omit<TypeSafeClientConfig, "apiKey"> = {};
+  if (options.baseURL) config.baseURL = options.baseURL;
+  if (options.model) config.defaultModel = options.model;
+  return config;
+}
+
 export function createClient(apiKey: string, config: Omit<TypeSafeClientConfig, "apiKey"> = {}) {
   return new TypeSafeClient({ ...config, apiKey, logLevel: "warn" });
+}
+
+export function describeEndpoint(baseURL: string | null): string {
+  if (!baseURL) return "https://api.typesafe.ai";
+  try {
+    const url = new URL(baseURL);
+    return `${url.origin}${url.pathname}`.replace(/\/$/, "") || url.origin;
+  } catch {
+    return "(custom)";
+  }
 }
 
 export async function runReview(options: {
@@ -116,7 +154,7 @@ export async function runReview(options: {
     return screenFile(client, file, changedTests);
   });
 
-  const signals = matrix
+  const thresholdSignals = matrix
     .flatMap(({ file, probabilities }) =>
       (Object.entries(probabilities) as Array<[Dimension, number]>).map(
         ([dimension, probability]): Signal => ({ file, dimension, probability }),
@@ -128,8 +166,16 @@ export async function runReview(options: {
         right.probability - left.probability ||
         left.file.path.localeCompare(right.file.path) ||
         left.dimension.localeCompare(right.dimension),
-    )
-    .slice(0, MAX_FOLLOW_UPS);
+    );
+  const signals = thresholdSignals.slice(0, MAX_FOLLOW_UPS);
+
+  const profileCandidates = [...matrix]
+    .sort((left, right) => maxProbability(right) - maxProbability(left))
+    .slice(0, MAX_PROFILES);
+  log(`Profiling ${profileCandidates.length} file(s)`);
+  const profiles = await mapLimit(profileCandidates, CONCURRENCY, ({ file, probabilities }) =>
+    profileFile(client, file, probabilities),
+  );
 
   log(`Inspecting ${signals.length} signal(s)`);
   const located = await mapLimit(signals, CONCURRENCY, (signal) =>
@@ -153,6 +199,7 @@ export async function runReview(options: {
       screenThreshold: SCREEN_THRESHOLD,
       maxFollowUps: MAX_FOLLOW_UPS,
       maxFiles,
+      maxProfiles: MAX_PROFILES,
     },
     reviewedFiles: sourceFiles.length,
     skippedFiles,
@@ -160,7 +207,17 @@ export async function runReview(options: {
     truncatedFiles: [...sourceFiles, ...testFiles]
       .filter(({ truncated }) => truncated)
       .map(({ path }) => path),
+    followedSignals: signals.length,
     matrix: matrix.map(({ file, probabilities }) => ({ file: file.path, probabilities })),
+    profiles,
+    workflow: {
+      cells: sourceFiles.length * Object.keys(dimensions).length,
+      signals: thresholdSignals.length,
+      inspected: signals.length,
+      located: findings.length,
+      routed: findings.filter((finding) => finding.owner !== null).length,
+      profiled: profiles.length,
+    },
     findings,
   };
 }
@@ -246,6 +303,37 @@ export async function screenFile(
       compatibility: response.answers.compatibility.noul,
       testGap: response.answers.testGap.noul,
     },
+  };
+}
+
+export async function profileFile(
+  client: SystemOneClient,
+  file: ChangedFile,
+  screeningProbabilities: Record<Dimension, number>,
+): Promise<FileProfile> {
+  const response = await client.systemOne({
+    state: {
+      file: { path: file.path, patch: file.patch },
+      screeningProbabilities,
+    },
+    questions: {
+      category: choice(
+        { question: "Which category best describes file.patch?", focus: "Primary purpose of the change" },
+        changeTypes,
+      ),
+      reviewPriority: score(
+        "Rate how closely a human should review file.patch, considering the code and screeningProbabilities.",
+        reviewPriorityRubric,
+      ),
+    },
+  });
+
+  return {
+    file: file.path,
+    category: response.answers.category.choice,
+    categoryConfidence: response.answers.category.confidence,
+    reviewPriority: response.answers.reviewPriority.score,
+    reviewPriorityConfidence: response.answers.reviewPriority.confidence,
   };
 }
 
@@ -353,6 +441,10 @@ export async function locateSignal(
     ownerConfidence,
     action: severity.score >= BLOCKING_SEVERITY ? "request_changes" : "comment",
   };
+}
+
+function maxProbability(screening: Screening): number {
+  return Math.max(...Object.values(screening.probabilities));
 }
 
 function compactTests(testFiles: ChangedFile[]): ChangedFile[] {
