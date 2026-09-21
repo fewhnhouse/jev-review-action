@@ -67,6 +67,7 @@ describe("readInputs", () => {
       eventPath,
       JSON.stringify({
         pull_request: {
+          number: 4,
           base: { sha: "base-sha" },
           head: { sha: "head-sha" },
         },
@@ -85,6 +86,9 @@ describe("readInputs", () => {
         maxFiles: 25,
         failOnSeverity: null,
         reportPath: join(root, "jev-review-report.json"),
+        githubToken: "",
+        postComment: true,
+        pullRequestNumber: 4,
       });
       expect(inputIo.setSecret).toHaveBeenCalledWith("secret");
     } finally {
@@ -101,6 +105,8 @@ describe("readInputs", () => {
       "max-files": "7",
       "fail-on-severity": "2",
       "report-path": "out/report.json",
+      "github-token": "gh-token",
+      "post-comment": "false",
     });
 
     expect(readInputs("/work", {}, inputIo)).toMatchObject({
@@ -110,7 +116,11 @@ describe("readInputs", () => {
       maxFiles: 7,
       failOnSeverity: 2,
       reportPath: "/work/out/report.json",
+      githubToken: "gh-token",
+      postComment: false,
+      pullRequestNumber: null,
     });
+    expect(inputIo.setSecret).toHaveBeenCalledWith("gh-token");
   });
 
   it("uses push before and GITHUB_SHA", () => {
