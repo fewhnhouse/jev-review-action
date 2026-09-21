@@ -2,14 +2,27 @@ import * as core from "@actions/core";
 import { readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { parseBoolean } from "./comment.js";
+import {
+  emptyConfidenceOnNoul,
+  emptyFailOnNoul,
+  parseProbabilityBar,
+  type ConfidenceOnNoul,
+  type FailOnNoul,
+} from "./policy.js";
+import { dimensionOrder, type Dimension } from "./types.js";
 
 export type ActionInputs = {
   apiKey: string;
+  apiBaseUrl: string | null;
+  apiModel: string | null;
   baseSha: string;
   headSha: string;
   paths: string[];
   maxFiles: number;
   failOnSeverity: number | null;
+  failOnNoul: FailOnNoul;
+  minConfidence: number | null;
+  confidenceOnNoul: ConfidenceOnNoul;
   reportPath: string;
   githubToken: string;
   postComment: boolean;
@@ -35,10 +48,11 @@ export function readInputs(
   env = process.env,
   io: InputIo = { getInput: core.getInput, setSecret: core.setSecret },
 ): ActionInputs {
-  const apiKey = io.getInput("typesafe-api-key", {
-    required: true,
-    trimWhitespace: true,
-  });
+  const apiKey =
+    optionalInput(io, "api-key") ?? optionalInput(io, "typesafe-api-key") ?? "";
+  if (!apiKey) {
+    throw new Error("Provide api-key or typesafe-api-key.");
+  }
   io.setSecret(apiKey);
   const githubToken = optionalInput(io, "github-token") ?? "";
   if (githubToken) io.setSecret(githubToken);
@@ -68,11 +82,16 @@ export function readInputs(
 
   return {
     apiKey,
+    apiBaseUrl: parseApiBaseUrl(optionalInput(io, "api-base-url")),
+    apiModel: optionalInput(io, "api-model") ?? null,
     baseSha,
     headSha,
     paths: parsePaths(io.getInput("paths") || "."),
     maxFiles,
     failOnSeverity: parseFailSeverity(io.getInput("fail-on-severity") || "none"),
+    failOnNoul: parseFailOnNoul(io),
+    minConfidence: parseProbabilityBar(io.getInput("min-confidence") || "none", "min-confidence"),
+    confidenceOnNoul: parseConfidenceOnNoul(io),
     reportPath,
     githubToken,
     postComment: parseBoolean(io.getInput("post-comment") || "true", "post-comment"),
@@ -96,6 +115,59 @@ export function parseFailSeverity(value: string): number | null {
     throw new Error("fail-on-severity must be one of: none, 1, 2, 3");
   }
   return Number(normalized);
+}
+
+const noulInputNames = {
+  correctness: "fail-on-correctness",
+  security: "fail-on-security",
+  reliability: "fail-on-reliability",
+  compatibility: "fail-on-compatibility",
+  testGap: "fail-on-test-gap",
+} as const satisfies Record<Dimension, string>;
+
+const confidenceInputNames = {
+  correctness: "confidence-on-correctness",
+  security: "confidence-on-security",
+  reliability: "confidence-on-reliability",
+  compatibility: "confidence-on-compatibility",
+  testGap: "confidence-on-test-gap",
+} as const satisfies Record<Dimension, string>;
+
+export function parseFailOnNoul(io: InputIo): FailOnNoul {
+  return parseDimensionBars(io, noulInputNames, emptyFailOnNoul());
+}
+
+export function parseConfidenceOnNoul(io: InputIo): ConfidenceOnNoul {
+  return parseDimensionBars(io, confidenceInputNames, emptyConfidenceOnNoul());
+}
+
+function parseDimensionBars(
+  io: InputIo,
+  names: Record<Dimension, string>,
+  bars: FailOnNoul,
+): FailOnNoul {
+  for (const dimension of dimensionOrder) {
+    bars[dimension] = parseProbabilityBar(io.getInput(names[dimension]) || "none", names[dimension]);
+  }
+  return bars;
+}
+
+export function parseApiBaseUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  if (value.length > 2048) throw new Error("api-base-url is too long");
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("api-base-url must be an absolute URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("api-base-url must use http or https");
+  }
+  if (url.username || url.password) {
+    throw new Error("api-base-url must not contain credentials");
+  }
+  return value.replace(/\/+$/, "");
 }
 
 export function safeReportPath(cwd: string, value: string): string {

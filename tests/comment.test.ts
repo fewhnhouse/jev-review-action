@@ -8,60 +8,51 @@ import {
   renderStickyComment,
   upsertStickyComment,
 } from "../src/comment.js";
-import type { ReviewReport } from "../src/types.js";
-
-function report(overrides: Partial<ReviewReport> = {}): ReviewReport {
-  return {
-    version: 1,
-    baseSha: "base",
-    headSha: "head",
-    generatedAt: "2026-09-21T10:00:00.000Z",
-    config: { screenThreshold: 0.7, maxFollowUps: 8, maxFiles: 25 },
-    reviewedFiles: 1,
-    skippedFiles: [],
-    changedTests: [],
-    truncatedFiles: [],
-    matrix: [],
-    findings: [],
-    ...overrides,
-  };
-}
+import { finding, report } from "./fixtures.js";
 
 describe("renderStickyComment", () => {
-  it("renders an empty review as a sticky summary", () => {
+  it("renders an empty review as a sticky dashboard", () => {
     const body = renderStickyComment(report());
-    expect(body).toContain(COMMENT_MARKER);
-    expect(body).toContain("found **0** supported concern(s)");
-    expect(body).toContain("No concern survived evidence selection and impact scoring.");
+    expect(body.startsWith(COMMENT_MARKER)).toBe(true);
+    expect(body).toContain("JEV review");
+    expect(body).toContain("Check passed");
+    expect(body).toContain("<h2>1</h2>");
+    expect(body).toContain("None.");
     expect(body).not.toContain("src/a.ts");
   });
 
-  it("renders findings without free-form model prose", () => {
+  it("renders findings, profiles, and skipped files without free-form model prose", () => {
     const body = renderStickyComment(
       report({
-        findings: [
+        findings: [finding],
+        skippedFiles: ["src/b.ts", "src/c.ts"],
+        followedSignals: 1,
+        profiles: [
           {
             file: "src/a.ts",
-            line: 4,
-            dimension: "security",
-            screeningProbability: 0.9,
-            locationConfidence: 0.8,
-            mechanism: "unsafeDefault",
-            mechanismConfidence: 0.85,
-            severity: 2.1,
-            severityConfidence: 0.75,
-            owner: "security",
-            ownerConfidence: 0.7,
-            action: "request_changes",
+            category: "behavior",
+            categoryConfidence: 0.9,
+            reviewPriority: 2.2,
+            reviewPriorityConfidence: 0.8,
           },
         ],
-        skippedFiles: ["src/b.ts", "src/c.ts"],
+        workflow: {
+          cells: 5,
+          signals: 1,
+          inspected: 1,
+          located: 1,
+          routed: 1,
+          profiled: 1,
+        },
       }),
     );
 
-    expect(body).toContain("| src/a.ts:4 | security / unsafe default | 2.10 | request_changes |");
-    expect(body).toContain("Skipped over `max-files`: src/b.ts, src/c.ts");
-    expect(body).toContain("structured questions");
+    expect(body).toContain("Findings");
+    expect(body).toContain("request changes");
+    expect(body).toContain("Skipped `max-files`: src/b.ts, src/c.ts");
+    expect(body).toContain("Profiles");
+    expect(body).not.toContain("How to read this comment");
+    expect(body).not.toContain("not a bug list");
   });
 });
 
@@ -69,11 +60,16 @@ describe("upsertStickyComment", () => {
   it("creates a comment when none exists", async () => {
     const api = {
       listComments: vi.fn().mockResolvedValue([]),
-      createComment: vi.fn().mockResolvedValue(undefined),
+      createComment: vi.fn().mockResolvedValue({
+        htmlUrl: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-1",
+      }),
       updateComment: vi.fn(),
     };
 
-    await expect(upsertStickyComment(api, "body")).resolves.toBe("created");
+    await expect(upsertStickyComment(api, "body")).resolves.toEqual({
+      action: "created",
+      htmlUrl: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-1",
+    });
     expect(api.createComment).toHaveBeenCalledWith("body");
     expect(api.updateComment).not.toHaveBeenCalled();
   });
@@ -82,13 +78,22 @@ describe("upsertStickyComment", () => {
     const api = {
       listComments: vi.fn().mockResolvedValue([
         { id: 1, body: "unrelated" },
-        { id: 9, body: `${COMMENT_MARKER}\nold` },
+        {
+          id: 9,
+          body: `${COMMENT_MARKER}\nold`,
+          html_url: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-9",
+        },
       ]),
       createComment: vi.fn(),
-      updateComment: vi.fn().mockResolvedValue(undefined),
+      updateComment: vi.fn().mockResolvedValue({
+        htmlUrl: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-9",
+      }),
     };
 
-    await expect(upsertStickyComment(api, "next")).resolves.toBe("updated");
+    await expect(upsertStickyComment(api, "next")).resolves.toEqual({
+      action: "updated",
+      htmlUrl: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-9",
+    });
     expect(api.updateComment).toHaveBeenCalledWith(9, "next");
     expect(api.createComment).not.toHaveBeenCalled();
   });
@@ -98,14 +103,16 @@ describe("postStickySummary", () => {
   const log = { info: vi.fn(), warning: vi.fn() };
 
   it("skips when disabled or not on a pull request", async () => {
-    await postStickySummary({
-      report: report(),
-      enabled: false,
-      token: "token",
-      repository: "fewhnhouse/jev-review-action",
-      pullRequestNumber: 4,
-      log,
-    });
+    await expect(
+      postStickySummary({
+        report: report(),
+        enabled: false,
+        token: "token",
+        repository: "fewhnhouse/jev-review-action",
+        pullRequestNumber: 4,
+        log,
+      }),
+    ).resolves.toEqual({ action: "skipped", commentUrl: "" });
     await postStickySummary({
       report: report(),
       enabled: true,
@@ -143,6 +150,29 @@ describe("postStickySummary", () => {
     );
   });
 
+  it("returns the comment URL after a successful upsert", async () => {
+    await expect(
+      postStickySummary({
+        report: report(),
+        enabled: true,
+        token: "token",
+        repository: "fewhnhouse/jev-review-action",
+        pullRequestNumber: 4,
+        log,
+        api: {
+          listComments: vi.fn().mockResolvedValue([]),
+          createComment: vi.fn().mockResolvedValue({
+            htmlUrl: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-1",
+          }),
+          updateComment: vi.fn(),
+        },
+      }),
+    ).resolves.toEqual({
+      action: "created",
+      commentUrl: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-1",
+    });
+  });
+
   it("warns instead of failing when the GitHub API rejects the comment", async () => {
     await postStickySummary({
       report: report(),
@@ -178,7 +208,10 @@ describe("createCommentApi", () => {
         ok: true,
         status: 201,
         statusText: "Created",
-        text: async () => "{}",
+        text: async () =>
+          JSON.stringify({
+            html_url: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-1",
+          }),
       };
     });
 
@@ -191,7 +224,9 @@ describe("createCommentApi", () => {
     });
 
     await expect(api.listComments(1)).resolves.toEqual([]);
-    await api.createComment("hello");
+    await expect(api.createComment("hello")).resolves.toEqual({
+      htmlUrl: "https://github.com/fewhnhouse/jev-review-action/pull/4#issuecomment-1",
+    });
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://api.github.com/repos/fewhnhouse/jev-review-action/issues/4/comments",
       expect.objectContaining({ method: "POST" }),

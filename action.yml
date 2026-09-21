@@ -7,9 +7,18 @@ branding:
   color: purple
 
 inputs:
+  api-key:
+    description: API key for the configured JEV endpoint (TypeSafe or a TypeSafe-compatible gateway)
+    required: false
   typesafe-api-key:
-    description: TypeSafe API key used only for JEV System One requests
-    required: true
+    description: Alias for api-key; used when api-key is omitted
+    required: false
+  api-base-url:
+    description: TypeSafe System One API root. Defaults to https://api.typesafe.ai. Point this at a reverse proxy or Vercel-hosted TypeSafe-compatible gateway, not an OpenAI chat-completions URL.
+    required: false
+  api-model:
+    description: Model override passed to the TypeSafe SDK (defaultModel). Omit to use the endpoint default.
+    required: false
   base-sha:
     description: Base Git revision; inferred for pull_request and push events when omitted
     required: false
@@ -25,7 +34,51 @@ inputs:
     required: false
     default: "25"
   fail-on-severity:
-    description: Fail when a finding reaches this severity (none, 1, 2, or 3)
+    description: Fail when a finding reaches this severity (none, 1, 2, or 3). Independent of the 0.70 follow-up bar.
+    required: false
+    default: none
+  fail-on-correctness:
+    description: Fail when any file's correctness screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  fail-on-security:
+    description: Fail when any file's security screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  fail-on-reliability:
+    description: Fail when any file's reliability screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  fail-on-compatibility:
+    description: Fail when any file's compatibility screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  fail-on-test-gap:
+    description: Fail when any file's test-gap screening probability is at or above this value (none, or 0–1)
+    required: false
+    default: none
+  min-confidence:
+    description: Minimum JEV confidence (0–1) required before a fail bar counts. Default none respects every reply. Noul cells use reported confidence when present, otherwise 2×|p−0.5|.
+    required: false
+    default: none
+  confidence-on-correctness:
+    description: Confidence floor for correctness, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
+  confidence-on-security:
+    description: Confidence floor for security, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
+  confidence-on-reliability:
+    description: Confidence floor for reliability, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
+  confidence-on-compatibility:
+    description: Confidence floor for compatibility, overriding min-confidence (none, or 0–1)
+    required: false
+    default: none
+  confidence-on-test-gap:
+    description: Confidence floor for test-gap, overriding min-confidence (none, or 0–1)
     required: false
     default: none
   report-path:
@@ -46,8 +99,34 @@ outputs:
     description: Number of supported findings
   blocking-findings-count:
     description: Number of findings with severity 2 or higher
+  request-changes-count:
+    description: Number of findings with action request_changes
+  comment-findings-count:
+    description: Number of findings with action comment
   reviewed-files:
     description: Number of changed source files screened
+  changed-tests:
+    description: Number of changed test files used as context
+  followed-signals:
+    description: Number of screening signals inspected after the follow-up cap
+  located-findings:
+    description: Number of signals that produced a supported finding
+  routed-findings:
+    description: Number of findings routed to a reviewer specialty
+  skipped-files-count:
+    description: Number of source files skipped because they exceeded max-files
+  has-findings:
+    description: true when at least one finding survived evidence selection
+  has-blocking-findings:
+    description: true when at least one finding has severity 2 or higher
+  conclusion:
+    description: success, comment, or request_changes
+  check-passed:
+    description: true when the job did not cross a configured fail bar
+  highest-severity:
+    description: Highest finding severity, or empty when there are no findings
+  comment-url:
+    description: URL of the sticky pull request comment, or empty when none was posted
   report-path:
     description: Absolute path to the JSON report
 

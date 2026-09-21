@@ -1,4 +1,4 @@
-import { escapeMarkdown, humanize, joinBounded } from "./format.js";
+import { renderReviewDashboard } from "./dashboard.js";
 import type { ReviewReport } from "./types.js";
 
 export const COMMENT_MARKER = "<!-- jev-review-action -->";
@@ -6,17 +6,27 @@ export const COMMENT_MARKER = "<!-- jev-review-action -->";
 export type CommentRecord = {
   id: number;
   body?: string | null;
+  html_url?: string | null;
+};
+
+export type CommentWriteResult = {
+  htmlUrl: string;
 };
 
 export type CommentApi = {
   listComments: (page: number) => Promise<CommentRecord[]>;
-  createComment: (body: string) => Promise<void>;
-  updateComment: (id: number, body: string) => Promise<void>;
+  createComment: (body: string) => Promise<CommentWriteResult>;
+  updateComment: (id: number, body: string) => Promise<CommentWriteResult>;
 };
 
 export type CommentLogger = {
   info: (message: string) => void;
   warning: (message: string) => void;
+};
+
+export type StickyCommentResult = {
+  action: "created" | "updated" | "skipped";
+  commentUrl: string;
 };
 
 type FetchLike = (
@@ -30,58 +40,7 @@ type FetchLike = (
 }>;
 
 export function renderStickyComment(report: ReviewReport): string {
-  const lines = [
-    COMMENT_MARKER,
-    "## JEV Review",
-    "",
-    `Screened **${report.reviewedFiles}** source file(s) and found **${report.findings.length}** supported concern(s).`,
-    "",
-  ];
-
-  if (report.findings.length > 0) {
-    lines.push("| File | Concern | Severity | Action |");
-    lines.push("| --- | --- | --- | --- |");
-    for (const finding of report.findings) {
-      const file = `${escapeMarkdown(finding.file)}:${finding.line}`;
-      const concern = `${escapeMarkdown(finding.dimension)} / ${escapeMarkdown(humanize(finding.mechanism))}`;
-      lines.push(
-        `| ${file} | ${concern} | ${finding.severity.toFixed(2)} | ${finding.action} |`,
-      );
-    }
-    lines.push("");
-  } else {
-    lines.push("No concern survived evidence selection and impact scoring.");
-    lines.push("");
-  }
-
-  if (report.skippedFiles.length > 0) {
-    lines.push(
-      `Skipped over \`max-files\`: ${escapeMarkdown(joinBounded(report.skippedFiles))}`,
-    );
-    lines.push("");
-  }
-  if (report.truncatedFiles.length > 0) {
-    lines.push(
-      `Truncated patches: ${escapeMarkdown(joinBounded(report.truncatedFiles))}`,
-    );
-    lines.push("");
-  }
-
-  lines.push(
-    "_JEV answers structured questions; this summary is rendered from those fields, not free-form model prose._",
-  );
-  lines.push("");
-  lines.push("<details>");
-  lines.push("<summary>Review policy</summary>");
-  lines.push("");
-  lines.push(`- Screening threshold: ${report.config.screenThreshold}`);
-  lines.push(`- Maximum follow-ups: ${report.config.maxFollowUps}`);
-  lines.push(`- Base: \`${escapeMarkdown(report.baseSha)}\``);
-  lines.push(`- Head: \`${escapeMarkdown(report.headSha)}\``);
-  lines.push("");
-  lines.push("</details>");
-  lines.push("");
-  return lines.join("\n");
+  return `${COMMENT_MARKER}\n${renderReviewDashboard(report)}`;
 }
 
 export function createCommentApi(options: {
@@ -128,16 +87,18 @@ export function createCommentApi(options: {
       return value as CommentRecord[];
     },
     async createComment(body: string) {
-      await request(`/issues/${options.issueNumber}/comments`, {
+      const text = await request(`/issues/${options.issueNumber}/comments`, {
         method: "POST",
         body: JSON.stringify({ body }),
       });
+      return { htmlUrl: htmlUrlFrom(text) };
     },
     async updateComment(id: number, body: string) {
-      await request(`/issues/comments/${id}`, {
+      const text = await request(`/issues/comments/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ body }),
       });
+      return { htmlUrl: htmlUrlFrom(text) };
     },
   };
 }
@@ -145,20 +106,23 @@ export function createCommentApi(options: {
 export async function upsertStickyComment(
   api: CommentApi,
   body: string,
-): Promise<"created" | "updated"> {
+): Promise<{ action: "created" | "updated"; htmlUrl: string }> {
   let page = 1;
   while (true) {
     const comments = await api.listComments(page);
     const existing = comments.find((comment) => comment.body?.includes(COMMENT_MARKER));
     if (existing) {
-      await api.updateComment(existing.id, body);
-      return "updated";
+      const written = await api.updateComment(existing.id, body);
+      return {
+        action: "updated",
+        htmlUrl: written.htmlUrl || existing.html_url || "",
+      };
     }
     if (comments.length < 100) break;
     page += 1;
   }
-  await api.createComment(body);
-  return "created";
+  const written = await api.createComment(body);
+  return { action: "created", htmlUrl: written.htmlUrl };
 }
 
 export async function postStickySummary(options: {
@@ -170,25 +134,25 @@ export async function postStickySummary(options: {
   apiUrl?: string;
   api?: CommentApi;
   log: CommentLogger;
-}): Promise<void> {
+}): Promise<StickyCommentResult> {
   if (!options.enabled) {
     options.log.info("Sticky pull request comment is disabled.");
-    return;
+    return { action: "skipped", commentUrl: "" };
   }
   if (options.pullRequestNumber === null) {
     options.log.info("Skipping sticky comment because this event is not a pull request.");
-    return;
+    return { action: "skipped", commentUrl: "" };
   }
   if (!options.token) {
     options.log.warning(
       "Skipping sticky comment because github-token is empty. Grant pull-requests: write and pass github.token.",
     );
-    return;
+    return { action: "skipped", commentUrl: "" };
   }
   const parsed = parseRepository(options.repository);
   if (!parsed) {
     options.log.warning("Skipping sticky comment because GITHUB_REPOSITORY is missing or invalid.");
-    return;
+    return { action: "skipped", commentUrl: "" };
   }
 
   try {
@@ -201,11 +165,13 @@ export async function postStickySummary(options: {
         issueNumber: options.pullRequestNumber,
         ...(options.apiUrl ? { apiUrl: options.apiUrl } : {}),
       });
-    const action = await upsertStickyComment(api, renderStickyComment(options.report));
-    options.log.info(`Sticky pull request comment ${action}.`);
+    const result = await upsertStickyComment(api, renderStickyComment(options.report));
+    options.log.info(`Sticky pull request comment ${result.action}.`);
+    return { action: result.action, commentUrl: result.htmlUrl };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     options.log.warning(`Unable to post sticky pull request comment: ${message}`);
+    return { action: "skipped", commentUrl: "" };
   }
 }
 
@@ -223,4 +189,16 @@ export function parseBoolean(value: string, name: string): boolean {
   if (normalized === "true") return true;
   if (normalized === "false") return false;
   throw new Error(`${name} must be true or false`);
+}
+
+function htmlUrlFrom(text: string): string {
+  if (!text.trim()) return "";
+  try {
+    const value: unknown = JSON.parse(text);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+    const url = (value as { html_url?: unknown }).html_url;
+    return typeof url === "string" ? url : "";
+  } catch {
+    return "";
+  }
 }

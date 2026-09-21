@@ -1,7 +1,9 @@
 import * as core from "@actions/core";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { escapeMarkdown, humanize, joinBounded } from "./format.js";
+import { renderReviewDashboard } from "./dashboard.js";
+import { humanize, joinBounded } from "./format.js";
+import { evaluateCheck } from "./policy.js";
 import type { ReviewReport } from "./types.js";
 
 export function writeReport(reportPath: string, report: ReviewReport): void {
@@ -12,17 +14,7 @@ export function writeReport(reportPath: string, report: ReviewReport): void {
   });
 }
 
-export async function publishResults(
-  report: ReviewReport,
-  reportPath: string,
-  failOnSeverity: number | null,
-): Promise<void> {
-  const blocking = report.findings.filter(({ severity }) => severity >= 2);
-  core.setOutput("findings-count", report.findings.length);
-  core.setOutput("blocking-findings-count", blocking.length);
-  core.setOutput("reviewed-files", report.reviewedFiles);
-  core.setOutput("report-path", reportPath);
-
+export async function publishResults(report: ReviewReport, reportPath: string): Promise<void> {
   if (report.skippedFiles.length > 0) {
     core.warning(
       `${report.skippedFiles.length} source file(s) exceeded max-files and were not reviewed: ${joinBounded(report.skippedFiles)}`,
@@ -47,49 +39,13 @@ export async function publishResults(
     );
   }
 
-  core.summary
-    .addHeading("JEV Review", 2)
-    .addRaw(
-      `Screened **${report.reviewedFiles}** source file(s) and found **${report.findings.length}** supported concern(s).`,
-    )
-    .addEOL();
+  await core.summary.addRaw(renderReviewDashboard(report), true).write();
+  core.info(`JSON report: ${reportPath}`);
 
-  if (report.findings.length > 0) {
-    core.summary.addTable([
-      [
-        { data: "File", header: true },
-        { data: "Concern", header: true },
-        { data: "Severity", header: true },
-        { data: "Action", header: true },
-      ],
-      ...report.findings.map((finding) => [
-        `${escapeMarkdown(finding.file)}:${finding.line}`,
-        `${escapeMarkdown(finding.dimension)} / ${escapeMarkdown(humanize(finding.mechanism))}`,
-        finding.severity.toFixed(2),
-        finding.action,
-      ]),
-    ]);
+  const check = evaluateCheck(report);
+  if (!check.passed) {
+    core.setFailed(check.reasons.join(" "));
   } else {
-    core.summary.addRaw("No concern survived evidence selection and impact scoring.").addEOL();
-  }
-
-  core.summary
-    .addDetails(
-      "Review policy",
-      [
-        `Screening threshold: ${report.config.screenThreshold}`,
-        `Maximum follow-ups: ${report.config.maxFollowUps}`,
-        `Base: \`${escapeMarkdown(report.baseSha)}\``,
-        `Head: \`${escapeMarkdown(report.headSha)}\``,
-        `JSON report: \`${escapeMarkdown(reportPath)}\``,
-      ].join("<br>"),
-    )
-    .write();
-
-  if (
-    failOnSeverity !== null &&
-    report.findings.some(({ severity }) => severity >= failOnSeverity)
-  ) {
-    core.setFailed(`JEV found at least one concern at severity ${failOnSeverity} or higher.`);
+    for (const reason of check.reasons) core.info(reason);
   }
 }

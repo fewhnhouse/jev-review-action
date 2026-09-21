@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReviewReport } from "../src/types.js";
+import { finding, report } from "./fixtures.js";
 
 const core = vi.hoisted(() => {
   const summary = {
@@ -25,6 +25,7 @@ const core = vi.hoisted(() => {
   return {
     setOutput: vi.fn(),
     warning: vi.fn(),
+    info: vi.fn(),
     setFailed: vi.fn(),
     summary,
   };
@@ -34,35 +35,33 @@ vi.mock("@actions/core", () => core);
 
 import { publishResults, writeReport } from "../src/report.js";
 
-function report(): ReviewReport {
-  return {
-    version: 1,
-    baseSha: "base",
-    headSha: "head",
+function sample() {
+  return report({
     generatedAt: "2026-09-20T12:00:00.000Z",
-    config: { screenThreshold: 0.7, maxFollowUps: 8, maxFiles: 25 },
-    reviewedFiles: 1,
-    skippedFiles: [],
-    changedTests: [],
-    truncatedFiles: [],
-    matrix: [],
-    findings: [
-      {
-        file: "src/a.ts",
-        line: 4,
-        dimension: "security",
-        screeningProbability: 0.9,
-        locationConfidence: 0.8,
-        mechanism: "unsafeDefault",
-        mechanismConfidence: 0.85,
-        severity: 2.1,
-        severityConfidence: 0.75,
-        owner: "security",
-        ownerConfidence: 0.7,
-        action: "request_changes",
+    findings: [finding],
+    config: {
+      screenThreshold: 0.7,
+      maxFollowUps: 8,
+      maxFiles: 25,
+      maxProfiles: 5,
+      failOnSeverity: 2,
+      failOnNoul: {
+        correctness: null,
+        security: null,
+        reliability: null,
+        compatibility: null,
+        testGap: null,
       },
-    ],
-  };
+      minConfidence: null,
+      confidenceOnNoul: {
+        correctness: null,
+        security: null,
+        reliability: null,
+        compatibility: null,
+        testGap: null,
+      },
+    },
+  });
 }
 
 afterEach(() => {
@@ -75,10 +74,11 @@ describe("writeReport", () => {
     const path = join(root, "nested", "report.json");
 
     try {
-      writeReport(path, report());
+      writeReport(path, sample());
       expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({
         version: 1,
         reviewedFiles: 1,
+        workflow: expect.objectContaining({ cells: 5 }),
       });
       expect(statSync(path).mode & 0o777).toBe(0o600);
     } finally {
@@ -88,22 +88,54 @@ describe("writeReport", () => {
 });
 
 describe("publishResults", () => {
-  it("sets outputs, creates annotations, and enforces the configured threshold", async () => {
-    await publishResults(report(), "/work/report.json", 2);
+  it("creates annotations, writes the dashboard summary, and enforces the threshold", async () => {
+    await publishResults(sample(), "/work/report.json");
 
-    expect(core.setOutput).toHaveBeenCalledWith("findings-count", 1);
-    expect(core.setOutput).toHaveBeenCalledWith("blocking-findings-count", 1);
+    expect(core.setOutput).not.toHaveBeenCalled();
     expect(core.warning).toHaveBeenCalledWith(
       expect.stringContaining("[security]"),
       expect.objectContaining({ file: "src/a.ts", startLine: 4 }),
     );
+    expect(core.summary.addRaw).toHaveBeenCalledWith(expect.stringContaining("JEV review"), true);
     expect(core.setFailed).toHaveBeenCalledWith(expect.stringContaining("severity 2"));
     expect(core.summary.write).toHaveBeenCalledOnce();
+    expect(core.info).toHaveBeenCalledWith("JSON report: /work/report.json");
   });
 
-  it("does not fail when fail-on-severity is none", async () => {
-    await publishResults(report(), "/work/report.json", null);
+  it("fails when a per-category screening bar is crossed", async () => {
+    await publishResults(
+      report({
+        matrix: [
+          {
+            file: "src/a.ts",
+            probabilities: {
+              correctness: 0.1,
+              security: 0.82,
+              reliability: 0.2,
+              compatibility: 0.12,
+              testGap: 0.05,
+            },
+          },
+        ],
+        config: {
+          ...report().config,
+          failOnNoul: {
+            correctness: null,
+            security: 0.7,
+            reliability: null,
+            compatibility: null,
+            testGap: null,
+          },
+        },
+      }),
+      "/work/report.json",
+    );
 
+    expect(core.setFailed).toHaveBeenCalledWith(expect.stringContaining("Security peaked at 0.82"));
+  });
+
+  it("does not fail when fail-on-severity is none and no category bars are set", async () => {
+    await publishResults(report({ findings: [finding] }), "/work/report.json");
     expect(core.setFailed).not.toHaveBeenCalled();
   });
 });

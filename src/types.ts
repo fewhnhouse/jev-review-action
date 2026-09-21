@@ -8,6 +8,22 @@ export const dimensions = {
 
 export type Dimension = keyof typeof dimensions;
 
+export const dimensionOrder = [
+  "correctness",
+  "security",
+  "reliability",
+  "compatibility",
+  "testGap",
+] as const satisfies readonly Dimension[];
+
+export const dimensionLabels: Record<Dimension, string> = {
+  correctness: "Correctness",
+  security: "Security",
+  reliability: "Reliability",
+  compatibility: "Compatibility",
+  testGap: "Test gap",
+};
+
 export type ChangedFile = {
   path: string;
   patch: string;
@@ -23,6 +39,7 @@ export type Hunk = {
 export type Screening = {
   file: ChangedFile;
   probabilities: Record<Dimension, number>;
+  confidences: Record<Dimension, number | null>;
 };
 
 export type Signal = {
@@ -46,6 +63,25 @@ export type Finding = {
   action: "comment" | "request_changes";
 };
 
+export type FileProfile = {
+  file: string;
+  category: string;
+  categoryConfidence: number;
+  reviewPriority: number;
+  reviewPriorityConfidence: number;
+};
+
+export type ReviewWorkflow = {
+  cells: number;
+  signals: number;
+  inspected: number;
+  located: number;
+  routed: number;
+  profiled: number;
+};
+
+export type ReviewConclusion = "success" | "comment" | "request_changes";
+
 export type ReviewReport = {
   version: 1;
   baseSha: string;
@@ -55,11 +91,23 @@ export type ReviewReport = {
     screenThreshold: number;
     maxFollowUps: number;
     maxFiles: number;
+    maxProfiles: number;
+    failOnSeverity: number | null;
+    failOnNoul: Record<Dimension, number | null>;
+    minConfidence: number | null;
+    confidenceOnNoul: Record<Dimension, number | null>;
   };
   reviewedFiles: number;
   skippedFiles: string[];
   changedTests: string[];
   truncatedFiles: string[];
-  matrix: Array<{ file: string; probabilities: Record<Dimension, number> }>;
+  followedSignals: number;
+  matrix: Array<{
+    file: string;
+    probabilities: Record<Dimension, number>;
+    confidences?: Record<Dimension, number | null>;
+  }>;
+  profiles: FileProfile[];
+  workflow: ReviewWorkflow;
   findings: Finding[];
 };
