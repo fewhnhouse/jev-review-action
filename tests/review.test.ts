@@ -67,6 +67,37 @@ describe("screenFile", () => {
       compatibility: 0.3,
       testGap: 0.4,
     });
+    expect(result.confidences).toEqual({
+      correctness: null,
+      security: null,
+      reliability: null,
+      compatibility: null,
+      testGap: null,
+    });
+  });
+
+  it("keeps a reported noul confidence when the endpoint sends one", async () => {
+    const { client } = fakeClient(() => ({
+      model: "test",
+      usage: { input_tokens: 1, output_tokens: 1 },
+      answers: {
+        correctness: { type: "noul", noul: 0.85, confidence: 0.92 },
+        security: { type: "noul", noul: 0.1, confidence: 0.4 },
+        reliability: { type: "noul", noul: 0.2 },
+        compatibility: { type: "noul", noul: 0.3 },
+        testGap: { type: "noul", noul: 0.4 },
+      },
+    }));
+
+    await expect(screenFile(client, file, [])).resolves.toMatchObject({
+      confidences: {
+        correctness: 0.92,
+        security: 0.4,
+        reliability: null,
+        compatibility: null,
+        testGap: null,
+      },
+    });
   });
 });
 
