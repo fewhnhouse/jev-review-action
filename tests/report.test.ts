@@ -52,6 +52,14 @@ function sample() {
         compatibility: null,
         testGap: null,
       },
+      minConfidence: null,
+      confidenceOnNoul: {
+        correctness: null,
+        security: null,
+        reliability: null,
+        compatibility: null,
+        testGap: null,
+      },
     },
   });
 }
