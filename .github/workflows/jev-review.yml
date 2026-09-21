@@ -1,0 +1,29 @@
+name: JEV review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Review changed JavaScript and TypeScript
+        id: jev
+        uses: ./
+        with:
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+
+      - name: Show JEV outputs
+        if: always()
+        run: |
+          echo "findings ${{ steps.jev.outputs.findings-count }}"
+          echo "blocking ${{ steps.jev.outputs.blocking-findings-count }}"
+          echo "reviewed files ${{ steps.jev.outputs.reviewed-files }}"
