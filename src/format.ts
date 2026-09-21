@@ -5,8 +5,32 @@ export function humanize(value: string): string {
     .toLowerCase();
 }
 
+export function titleCase(value: string): string {
+  return humanize(value).replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
+
 export function escapeMarkdown(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll("|", "\\|").replaceAll("`", "\\`");
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+export function truncatePath(path: string, max = 44): { prefix: string; name: string } {
+  const segments = path.split("/");
+  const name = segments.pop() ?? path;
+  const directory = segments.length > 0 ? `${segments.join("/")}/` : "";
+  if (path.length <= max) return { prefix: directory, name };
+
+  const budget = Math.max(8, max - name.length - 1);
+  const prefix = directory.length <= budget ? directory : `${directory.slice(0, budget)}…`;
+  return { prefix, name };
 }
 
 export function joinBounded(items: readonly string[], limit = 8): string {
