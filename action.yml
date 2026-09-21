@@ -32,6 +32,14 @@ inputs:
     description: Workspace-relative path for the JSON report
     required: false
     default: jev-review-report.json
+  github-token:
+    description: Token used to create or update the sticky pull request summary comment
+    required: false
+    default: ${{ github.token }}
+  post-comment:
+    description: Post or update a sticky pull request comment rendered from JEV fields
+    required: false
+    default: "true"
 
 outputs:
   findings-count:
